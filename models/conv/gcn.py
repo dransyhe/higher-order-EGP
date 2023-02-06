@@ -34,5 +34,3 @@ class GCNConv(MessagePassing):
     def update(self, aggr_out):
         return aggr_out
 
-
-

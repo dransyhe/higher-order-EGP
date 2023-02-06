@@ -65,8 +65,8 @@ def main():
     parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
     parser.add_argument('--device', type=int, default=0,
                         help='which gpu to use if any (default: 0)')
-    parser.add_argument('--gnn', type=str, default='gin-virtual',
-                        help='GNN gin, gin-virtual, or gcn, or gcn-virtual (default: gin-virtual)')
+    parser.add_argument('--gnn', type=str, default='gcn',
+                        help='GNN gin or gcn, (default: gcn)')
     parser.add_argument('--drop_ratio', type=float, default=0.5,
                         help='dropout ratio (default: 0.5)')
     parser.add_argument('--num_layer', type=int, default=5,
@@ -115,16 +115,16 @@ def main():
 
     if args.gnn == 'gin':
         model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-                    drop_ratio=args.drop_ratio, virtual_node=False).to(device)
-    elif args.gnn == 'gin-virtual':
-        model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-                    drop_ratio=args.drop_ratio, virtual_node=True).to(device)
+                    drop_ratio=args.drop_ratio).to(device)
+    # elif args.gnn == 'gin-virtual':
+    #     model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
+    #                 drop_ratio=args.drop_ratio, virtual_node=True).to(device)
     elif args.gnn == 'gcn':
         model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-                    drop_ratio=args.drop_ratio, virtual_node=False).to(device)
-    elif args.gnn == 'gcn-virtual':
-        model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-                    drop_ratio=args.drop_ratio, virtual_node=True).to(device)
+                    drop_ratio=args.drop_ratio).to(device)
+    # elif args.gnn == 'gcn-virtual':
+    #     model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
+    #                 drop_ratio=args.drop_ratio, virtual_node=True).to(device)
     else:
         raise ValueError('Invalid GNN type')
 
