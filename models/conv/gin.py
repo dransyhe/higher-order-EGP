@@ -28,6 +28,6 @@ class GINConv(MessagePassing):
         return F.relu(x_j + edge_attr)
 
     def update(self, aggr_out):
-        return
+        return aggr_out
 
 
