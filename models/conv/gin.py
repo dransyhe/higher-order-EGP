@@ -18,14 +18,20 @@ class GINConv(MessagePassing):
 
         self.bond_encoder = BondEncoder(emb_dim = emb_dim)
 
-    def forward(self, x, edge_index, edge_attr):
-        edge_embedding = self.bond_encoder(edge_attr)
+    def forward(self, x, edge_index, edge_attr=None):
+        if edge_attr is not None:
+            edge_embedding = self.bond_encoder(edge_attr)
+        else:
+            edge_embedding = None
         out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x=x, edge_attr=edge_embedding))
 
         return out
 
     def message(self, x_j, edge_attr):
-        return F.relu(x_j + edge_attr)
+        if edge_attr is not None:
+            return F.relu(x_j + edge_attr)
+        else:
+            return F.relu(x_j)
 
     def update(self, aggr_out):
         return aggr_out

@@ -33,37 +33,72 @@ class GNN_node(torch.nn.Module):
         ###List of GNNs
         self.convs = torch.nn.ModuleList()
         self.batch_norms = torch.nn.ModuleList()
+        self.expander_left_convs = torch.nn.ModuleList()
+        self.expander_left_batch_norms = torch.nn.ModuleList()
+        self.expander_right_convs = torch.nn.ModuleList()
+        self.expander_right_batch_norms = torch.nn.ModuleList()
 
         for layer in range(num_layer):
             if gnn_type == 'gin':
                 self.convs.append(GINConv(emb_dim))
+                self.expander_left_convs.append(GINConv(emb_dim))
+                self.expander_right_convs.append(GINConv(emb_dim))
             elif gnn_type == 'gcn':
                 self.convs.append(GCNConv(emb_dim))
+                self.expander_left_convs.append(GCNConv(emb_dim))
+                self.expander_right_convs.append(GCNConv(emb_dim))
             else:
                 raise ValueError('Undefined GNN type called {}'.format(gnn_type))
 
             self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
+            self.expander_left_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
+            self.expander_right_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
+
+    def propagate(self, conv, bn, h, edge_index, edge_attr=None, no_act=False):
+        h_residual = h
+        h = conv(h, edge_index, edge_attr)
+        h = bn(h)
+        if no_act:
+            h = F.dropout(h, self.drop_ratio, training=self.training)
+        else:
+            h = F.dropout(F.relu(h), self.drop_ratio, training=self.training)
+        if self.residual:
+            h += h_residual
+        return h
 
     def forward(self, batched_data):
         x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
+
+        # """""""""""""""""""""""""""""""""""""""""
+        # TODO: Generate bipartite expander graph
+        #   output: expander_edge_index
+        #   (possible extension): expander_edge_attr => currently set as None
+        expander_edge_index = edge_index  # testing purpose
+        # """""""""""""""""""""""""""""""""""""""""
 
         ### computing input node embedding
 
         h_list = [self.atom_encoder(x)]
         for layer in range(self.num_layer):
 
-            h = self.convs[layer](h_list[layer], edge_index, edge_attr)
-            h = self.batch_norms[layer](h)
+            # Propagation on the original graph
+            h = self.propagate(self.convs[layer],
+                               self.batch_norms[layer],
+                               h_list[layer], edge_index, edge_attr)
 
-            if layer == self.num_layer - 1:
-                #remove relu for the last layer
-                h = F.dropout(h, self.drop_ratio, training = self.training)
-            else:
-                h = F.dropout(F.relu(h), self.drop_ratio, training = self.training)
+            # Propagation on the expander graph
+            # from left to right
+            h = self.propagate(self.expander_left_convs[layer],
+                               self.expander_left_batch_norms[layer],
+                               h, expander_edge_index)
+            # from right to left
+            reverse_expander_edge_index = expander_edge_index[[1, 0]]
+            h = self.propagate(self.expander_right_convs[layer],
+                               self.expander_right_batch_norms[layer],
+                               h, reverse_expander_edge_index,
+                               no_act=(layer == self.num_layer - 1))
 
-            if self.residual:
-                h += h_list[layer]
-
+            # TODO: (can have other options) now only saves h at the end of three propagations
             h_list.append(h)
 
         ### Different implementations of Jk-concat

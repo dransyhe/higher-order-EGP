@@ -13,9 +13,12 @@ class GCNConv(MessagePassing):
         self.root_emb = torch.nn.Embedding(1, emb_dim)
         self.bond_encoder = BondEncoder(emb_dim = emb_dim)
 
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, x, edge_index, edge_attr=None):
         x = self.linear(x)
-        edge_embedding = self.bond_encoder(edge_attr)
+        if edge_attr is not None:
+            edge_embedding = self.bond_encoder(edge_attr)
+        else:
+            edge_embedding = None
 
         row, col = edge_index
 
@@ -29,7 +32,10 @@ class GCNConv(MessagePassing):
         return self.propagate(edge_index, x=x, edge_attr = edge_embedding, norm=norm) + F.relu(x + self.root_emb.weight) * 1./deg.view(-1,1)
 
     def message(self, x_j, edge_attr, norm):
-        return norm.view(-1, 1) * F.relu(x_j + edge_attr)
+        if edge_attr is not None:
+            return norm.view(-1, 1) * F.relu(x_j + edge_attr)
+        else:
+            return norm.view(-1, 1) * F.relu(x_j)
 
     def update(self, aggr_out):
         return aggr_out
