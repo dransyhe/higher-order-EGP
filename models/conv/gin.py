@@ -20,7 +20,6 @@ class GINConv(MessagePassing):
 
     def forward(self, x, edge_index, edge_attr):
         edge_embedding = self.bond_encoder(edge_attr)
-        breakpoint()
         out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x=x, edge_attr=edge_embedding))
 
         return out
