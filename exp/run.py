@@ -1,3 +1,5 @@
+import functools
+
 import torch
 from torch_geometric.loader import DataLoader
 import torch.optim as optim
@@ -6,13 +8,14 @@ from models.gnn import GNN
 from tqdm import tqdm
 import argparse
 import numpy as np
+import expander_graph_generation
 
 ### importing OGB
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
 cls_criterion = torch.nn.BCEWithLogitsLoss()
 reg_criterion = torch.nn.MSELoss()
-
+expander_graph_generation_functions = {"perfect_matchings": expander_graph_generation.add_expander_edges_via_perfect_matchings}
 
 def train(model, device, loader, optimizer, task_type):
     model.train()
@@ -81,7 +84,10 @@ def main():
                         help='number of workers (default: 0)')
     parser.add_argument('--dataset', type=str, default="ogbg-molhiv",
                         help='dataset name (default: ogbg-molhiv)')
-
+    parser.add_argument('--expander_graph_generation_method', type=str, default="perfect_matchings",
+                        help='method for generating expander graph')
+    parser.add_argument('--expander_graph_order', type=int, default=3,
+                        help='order of hypergraph expander graph')
     parser.add_argument('--feature', type=str, default="full",
                         help='full feature or simple feature')
     parser.add_argument('--filename', type=str, default="",
@@ -90,8 +96,13 @@ def main():
 
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
+    expander_graph_generation_fn = None
+    if args.expander_graph_generation_method is not None:
+        expander_graph_generation_fn = functools.partial(expander_graph_generation_functions[args.expander_graph_generation_method],
+                                                         args.expander_graph_order)
+
     ### automatic dataloading and splitting
-    dataset = PygGraphPropPredDataset(name=args.dataset)
+    dataset = PygGraphPropPredDataset(name=args.dataset, pre_transform=expander_graph_generation_fn)
 
     if args.feature == 'full':
         pass
