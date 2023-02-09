@@ -12,7 +12,8 @@ class GNN_node(torch.nn.Module):
     Output:
         node representations
     """
-    def __init__(self, num_layer, emb_dim, drop_ratio = 0.5, JK = "last", residual = False, gnn_type = 'gin'):
+
+    def __init__(self, num_layer, emb_dim, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin'):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
@@ -56,10 +57,10 @@ class GNN_node(torch.nn.Module):
             h = self.batch_norms[layer](h)
 
             if layer == self.num_layer - 1:
-                #remove relu for the last layer
-                h = F.dropout(h, self.drop_ratio, training = self.training)
+                # remove relu for the last layer
+                h = F.dropout(h, self.drop_ratio, training=self.training)
             else:
-                h = F.dropout(F.relu(h), self.drop_ratio, training = self.training)
+                h = F.dropout(F.relu(h), self.drop_ratio, training=self.training)
 
             if self.residual:
                 h += h_list[layer]
@@ -82,7 +83,8 @@ class GNN_node_expander(torch.nn.Module):
     Output:
         node representations
     """
-    def __init__(self, num_layer, emb_dim, drop_ratio = 0.5, JK = "last", residual = False, gnn_type = 'gin'):
+
+    def __init__(self, num_layer, emb_dim, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin'):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
@@ -137,20 +139,14 @@ class GNN_node_expander(torch.nn.Module):
         return h
 
     def forward(self, batched_data):
-        x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
-
-        # """""""""""""""""""""""""""""""""""""""""
-        # TODO: Generate bipartite expander graph
-        #   output: expander_edge_index
-        #   (possible extension): expander_edge_attr => currently set as None
-        expander_edge_index = edge_index  # testing purpose
-        # """""""""""""""""""""""""""""""""""""""""
+        x, edge_index, edge_attr, batch, expander_edge_index, expander_node_mask, num_nodes = \
+            batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch, \
+            batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
 
         ### computing input node embedding
 
         h_list = [self.atom_encoder(x)]
         for layer in range(self.num_layer):
-
             # Propagation on the original graph
             h = self.propagate(self.convs[layer],
                                self.batch_norms[layer],
@@ -200,6 +196,7 @@ class GNN(torch.nn.Module):
         self.emb_dim = emb_dim
         self.num_tasks = num_tasks
         self.graph_pooling = graph_pooling
+        self.expander = expander
 
         if self.num_layer < 2:
             raise ValueError("Number of GNN layers must be greater than 1.")
@@ -236,7 +233,15 @@ class GNN(torch.nn.Module):
     def forward(self, batched_data):
         h_node = self.gnn_node(batched_data)
 
-        h_graph = self.pool(h_node, batched_data.batch)
+        if self.expander:
+            # Replace batch[i] to -1 where expander_node_mask indicates it is an expander_edge_node
+            # +1 due to scatter function requires indices to be non-negative
+            batch = torch.where(batched_data.expander_node_mask > 0,
+                                batched_data.batch, -1) + 1
+            # Slice off h_graph[0] which was the aggregation of all expander_edge_node
+            h_graph = self.pool(h_node, batch)[1:, :]
+        else:
+            h_graph = self.pool(h_node, batched_data.batch)
 
         return self.graph_pred_linear(h_graph)
 

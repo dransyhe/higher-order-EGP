@@ -21,7 +21,7 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
     """
     new_data = data
     num_nodes = data.x.shape[0]
-    expander_graph_edge_nodes = torch.zeros(data.x.shape)
+    expander_graph_edge_nodes = torch.zeros(data.x.shape, dtype=data.x.dtype)
     expander_graph_x = torch.concat((data.x, expander_graph_edge_nodes))
     new_num_nodes = expander_graph_x.shape[0]
 
@@ -37,6 +37,7 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
 
     expander_edge_index = torch.cat([source_nodes[None, ...], destination_nodes[None, ...]], dim=0)
     expander_edge_index = coalesce(expander_edge_index)  # Remove duplicate edges
+    expander_edge_index = expander_edge_index.to(torch.int64)
 
     ones = torch.ones(num_nodes)
     zeros = torch.zeros(num_nodes)
