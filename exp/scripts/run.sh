@@ -10,5 +10,8 @@ python -m exp.run \
     --epochs=100 \
     --num_workers=0 \
     --dataset=ogbg-molhiv \
+    --expander=True \
+    --expander_graph_generation_method=perfect-matchings \
+    --expander_graph_order=3 \
     --feature=full \
     --filename=mol

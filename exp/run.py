@@ -1,21 +1,31 @@
 import functools
-
-import torch
-from torch_geometric.loader import DataLoader
-import torch.optim as optim
-from models.gnn import GNN
-
-from tqdm import tqdm
 import argparse
 import numpy as np
-import expander_graph_generation
+import torch
+import torch.optim as optim
+from distutils.util import strtobool
+from tqdm import tqdm
+from torch_geometric.loader import DataLoader
+
+from models.gnn import GNN
+from exp import expander_graph_generation
 
 ### importing OGB
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
 cls_criterion = torch.nn.BCEWithLogitsLoss()
 reg_criterion = torch.nn.MSELoss()
-expander_graph_generation_functions = {"perfect_matchings": expander_graph_generation.add_expander_edges_via_perfect_matchings}
+expander_graph_generation_functions = {"perfect-matchings": expander_graph_generation.add_expander_edges_via_perfect_matchings}
+
+
+def str2bool(x):
+    if type(x) == bool:
+        return x
+    elif type(x) == str:
+        return bool(strtobool(x))
+    else:
+        raise ValueError(f'Unrecognised type {type(x)}')
+
 
 def train(model, device, loader, optimizer, task_type):
     model.train()
@@ -84,7 +94,10 @@ def main():
                         help='number of workers (default: 0)')
     parser.add_argument('--dataset', type=str, default="ogbg-molhiv",
                         help='dataset name (default: ogbg-molhiv)')
-    parser.add_argument('--expander_graph_generation_method', type=str, default="perfect_matchings",
+    parser.add_argument('--expander', dest='expander', type=str2bool, default=False,
+                        help='whether to use expander graph propagation')
+    parser.add_argument('--expander_graph_generation_method', type=str, default="perfect-matchings",
+                        choices=['perfect-matchings'],
                         help='method for generating expander graph')
     parser.add_argument('--expander_graph_order', type=int, default=3,
                         help='order of hypergraph expander graph')
@@ -102,7 +115,10 @@ def main():
                                                          args.expander_graph_order)
 
     ### automatic dataloading and splitting
-    dataset = PygGraphPropPredDataset(name=args.dataset, pre_transform=expander_graph_generation_fn)
+    if not args.expander:
+        dataset = PygGraphPropPredDataset(name=args.dataset)
+    else:
+        dataset = PygGraphPropPredDataset(name=args.dataset, pre_transform=expander_graph_generation_fn)
 
     if args.feature == 'full':
         pass
@@ -126,13 +142,13 @@ def main():
 
     if args.gnn == 'gin':
         model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-                    drop_ratio=args.drop_ratio).to(device)
+                    drop_ratio=args.drop_ratio, expander=args.expander).to(device)
     # elif args.gnn == 'gin-virtual':
     #     model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
     #                 drop_ratio=args.drop_ratio, virtual_node=True).to(device)
     elif args.gnn == 'gcn':
         model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-                    drop_ratio=args.drop_ratio).to(device)
+                    drop_ratio=args.drop_ratio, expander=args.expander).to(device)
     # elif args.gnn == 'gcn-virtual':
     #     model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
     #                 drop_ratio=args.drop_ratio, virtual_node=True).to(device)
