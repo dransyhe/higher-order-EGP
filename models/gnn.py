@@ -126,9 +126,9 @@ class GNN_node_expander(torch.nn.Module):
             self.expander_left_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
             self.expander_right_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
 
-    def propagate(self, conv, bn, h, edge_index, edge_attr=None, no_act=False):
+    def propagate(self, conv, bn, h, edge_index, edge_attr=None, expander_node_mask=None, no_act=False):
         h_residual = h
-        h = conv(h, edge_index, edge_attr)
+        h = conv(h, edge_index, edge_attr, expander_node_mask)
         h = bn(h)
         if no_act:
             h = F.dropout(h, self.drop_ratio, training=self.training)
@@ -156,12 +156,14 @@ class GNN_node_expander(torch.nn.Module):
             # from left to right
             h = self.propagate(self.expander_left_convs[layer],
                                self.expander_left_batch_norms[layer],
-                               h, expander_edge_index)
+                               h, expander_edge_index,
+                               expander_node_mask=expander_node_mask)
             # from right to left
             reverse_expander_edge_index = expander_edge_index[[1, 0]]
             h = self.propagate(self.expander_right_convs[layer],
                                self.expander_right_batch_norms[layer],
                                h, reverse_expander_edge_index,
+                               expander_node_mask=expander_node_mask,
                                no_act=(layer == self.num_layer - 1))
 
             # TODO: (can have other options) now only saves h at the end of three propagations
