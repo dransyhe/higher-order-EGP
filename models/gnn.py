@@ -1,9 +1,11 @@
 import torch
 import torch.nn.functional as F
+import torch_scatter
 from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool, GlobalAttention, Set2Set
 from ogb.graphproppred.mol_encoder import AtomEncoder, BondEncoder
 from models.conv.gcn import GCNConv
 from models.conv.gin import GINConv
+from models.conv.summation import SumConv
 
 
 ### GNN to generate node embedding
@@ -111,6 +113,7 @@ class GNN_node_expander(torch.nn.Module):
         self.expander_left_batch_norms = torch.nn.ModuleList()
         self.expander_right_convs = torch.nn.ModuleList()
         self.expander_right_batch_norms = torch.nn.ModuleList()
+        self.summation = SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False)
 
         for layer in range(num_layer):
             if gnn_type == 'gin':
@@ -156,10 +159,13 @@ class GNN_node_expander(torch.nn.Module):
 
             # Propagation on the expander graph
             # from left to right
-            h = self.propagate(self.expander_left_convs[layer],
-                               self.expander_left_batch_norms[layer],
-                               h, expander_edge_index,
-                               expander_node_mask=None if self.expander_edge_handling == "learn-features" else expander_node_mask)
+            if self.expander_edge_handling in ["summation", "summation-mlp"]:
+                h = self.summation(h, expander_edge_index)
+            else:
+                h = self.propagate(self.expander_left_convs[layer],
+                                   self.expander_left_batch_norms[layer],
+                                   h, expander_edge_index,
+                                   expander_node_mask=None if self.expander_edge_handling == "learn-features" else expander_node_mask)
             # from right to left
             reverse_expander_edge_index = expander_edge_index[[1, 0]]
             h = self.propagate(self.expander_right_convs[layer],

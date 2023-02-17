@@ -102,7 +102,7 @@ def main():
     parser.add_argument('--expander_graph_order', type=int, default=3,
                         help='order of hypergraph expander graph')
     parser.add_argument('--expander_edge_handling', type=str, default='masking',
-                        choices=['masking', 'learn-features', 'summation'],
+                        choices=['masking', 'learn-features', 'summation', 'summation-mlp'],
                         help='method to handle expander edge nodes')
     parser.add_argument('--feature', type=str, default="full",
                         help='full feature or simple feature')
