@@ -9,7 +9,10 @@ class SumConv(MessagePassing):
         self.linear = nn.Linear(emb_dim, emb_dim)
 
     def forward(self, x, edge_index):
-        return self.propagate(edge_index, x=x)
+        x = self.propagate(edge_index, x=x)
+        if self.mlp:
+            x = self.linear(x)
+        return x
 
     def message(self, x_j):
         return x_j
