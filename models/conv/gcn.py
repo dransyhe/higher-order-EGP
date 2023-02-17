@@ -6,10 +6,10 @@ from torch_geometric.utils import degree
 
 
 class GCNConv(MessagePassing):
-    def __init__(self, emb_dim):
+    def __init__(self, emb_dim, bias=True):
         super(GCNConv, self).__init__(aggr='add')
 
-        self.linear = torch.nn.Linear(emb_dim, emb_dim)
+        self.linear = torch.nn.Linear(emb_dim, emb_dim, bias=bias)
         self.root_emb = torch.nn.Embedding(1, emb_dim)
         self.bond_encoder = BondEncoder(emb_dim = emb_dim)
 

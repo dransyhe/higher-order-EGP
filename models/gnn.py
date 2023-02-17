@@ -84,7 +84,8 @@ class GNN_node_expander(torch.nn.Module):
         node representations
     """
 
-    def __init__(self, num_layer, emb_dim, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin'):
+    def __init__(self, num_layer, emb_dim, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin',
+                       expander_edge_handling="masking"):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
@@ -96,6 +97,7 @@ class GNN_node_expander(torch.nn.Module):
         self.JK = JK
         ### add residual connection or not
         self.residual = residual
+        self.expander_edge_handling = expander_edge_handling
 
         if self.num_layer < 2:
             raise ValueError("Number of GNN layers must be greater than 1.")
@@ -110,15 +112,20 @@ class GNN_node_expander(torch.nn.Module):
         self.expander_right_convs = torch.nn.ModuleList()
         self.expander_right_batch_norms = torch.nn.ModuleList()
 
+        if self.expander_edge_handling == "masking":
+            bias = False
+        else:
+            bias = True
+
         for layer in range(num_layer):
             if gnn_type == 'gin':
                 self.convs.append(GINConv(emb_dim))
-                self.expander_left_convs.append(GINConv(emb_dim))
-                self.expander_right_convs.append(GINConv(emb_dim))
+                self.expander_left_convs.append(GINConv(emb_dim, bias))
+                self.expander_right_convs.append(GINConv(emb_dim, bias))
             elif gnn_type == 'gcn':
                 self.convs.append(GCNConv(emb_dim))
-                self.expander_left_convs.append(GCNConv(emb_dim))
-                self.expander_right_convs.append(GCNConv(emb_dim))
+                self.expander_left_convs.append(GCNConv(emb_dim, bias))
+                self.expander_right_convs.append(GCNConv(emb_dim, bias))
             else:
                 raise ValueError('Undefined GNN type called {}'.format(gnn_type))
 
@@ -184,7 +191,7 @@ class GNN(torch.nn.Module):
 
     def __init__(self, num_tasks, num_layer=5, emb_dim=300,
                  gnn_type='gin', residual=False, drop_ratio=0.5, JK="last", graph_pooling="mean",
-                 expander=False):
+                 expander=False, expander_edge_handling="masking"):
         '''
             num_tasks (int): number of labels to be predicted
             TODO: virtual_node (bool): whether to add virtual node or not
@@ -209,7 +216,7 @@ class GNN(torch.nn.Module):
                                      gnn_type=gnn_type)
         else:
             self.gnn_node = GNN_node_expander(num_layer, emb_dim, JK=JK, drop_ratio=drop_ratio, residual=residual,
-                                              gnn_type=gnn_type)
+                                              gnn_type=gnn_type, expander_edge_handling=expander_edge_handling)
 
         ### Pooling function to generate whole-graph embeddings
         if self.graph_pooling == "sum":

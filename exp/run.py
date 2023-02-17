@@ -101,6 +101,9 @@ def main():
                         help='method for generating expander graph')
     parser.add_argument('--expander_graph_order', type=int, default=3,
                         help='order of hypergraph expander graph')
+    parser.add_argument('--expander_edge_handling', type=str, default='masking',
+                        choices=['masking'],
+                        help='method to handle expander edge nodes')
     parser.add_argument('--feature', type=str, default="full",
                         help='full feature or simple feature')
     parser.add_argument('--filename', type=str, default="",
@@ -142,13 +145,13 @@ def main():
 
     if args.gnn == 'gin':
         model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-                    drop_ratio=args.drop_ratio, expander=args.expander).to(device)
+                    drop_ratio=args.drop_ratio, expander=args.expander, expander_edge_handling=args.expander_edge_handling).to(device)
     # elif args.gnn == 'gin-virtual':
     #     model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
     #                 drop_ratio=args.drop_ratio, virtual_node=True).to(device)
     elif args.gnn == 'gcn':
         model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-                    drop_ratio=args.drop_ratio, expander=args.expander).to(device)
+                    drop_ratio=args.drop_ratio, expander=args.expander, expander_edge_handling=args.expander_edge_handling).to(device)
     # elif args.gnn == 'gcn-virtual':
     #     model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
     #                 drop_ratio=args.drop_ratio, virtual_node=True).to(device)
