@@ -13,6 +13,6 @@ python -m exp.run \
     --expander=True \
     --expander_graph_generation_method=perfect-matchings \
     --expander_graph_order=3 \
-    --expander_edge_handling=masking
+    --expander_edge_handling=learn-features \
     --feature=full \
     --filename=mol

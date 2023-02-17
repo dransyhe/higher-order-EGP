@@ -112,10 +112,15 @@ class GNN_node_expander(torch.nn.Module):
         self.expander_right_convs = torch.nn.ModuleList()
         self.expander_right_batch_norms = torch.nn.ModuleList()
 
+        # Handling edge_node_features
         if self.expander_edge_handling == "masking":
             bias = False
         else:
             bias = True
+        if self.expander_edge_handling == "learn-features":
+            self.learn_edge_node = True
+        else:
+            self.learn_edge_node = False
 
         for layer in range(num_layer):
             if gnn_type == 'gin':
@@ -164,13 +169,13 @@ class GNN_node_expander(torch.nn.Module):
             h = self.propagate(self.expander_left_convs[layer],
                                self.expander_left_batch_norms[layer],
                                h, expander_edge_index,
-                               expander_node_mask=expander_node_mask)
+                               expander_node_mask=expander_node_mask if not self.learn_edge_node else None)
             # from right to left
             reverse_expander_edge_index = expander_edge_index[[1, 0]]
             h = self.propagate(self.expander_right_convs[layer],
                                self.expander_right_batch_norms[layer],
                                h, reverse_expander_edge_index,
-                               expander_node_mask=expander_node_mask,
+                               expander_node_mask=expander_node_mask if not self.learn_edge_node else None,
                                no_act=(layer == self.num_layer - 1))
 
             # TODO: (can have other options) now only saves h at the end of three propagations
