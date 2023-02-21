@@ -31,11 +31,8 @@ class GINConv(MessagePassing):
             edge_embedding = None
 
         # set expander_node_feature to 0-vector
-        # if expander_node_mask is not None:
-        #     expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
-        #     expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
-        #                                                    x.shape[1])
-        #     x = torch.where(expander_node_mask > 0, x, 0.0)
+        if expander_node_mask is not None:
+            x = x * expander_node_mask
 
         out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x=x, edge_attr=edge_embedding))
 

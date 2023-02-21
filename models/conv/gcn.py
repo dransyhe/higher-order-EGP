@@ -33,11 +33,8 @@ class GCNConv(MessagePassing):
         norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
 
         # set expander_node_feature to 0-vector
-        # if expander_node_mask is not None:
-        #     expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
-        #     expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
-        #                                                    x.shape[1])
-        #     x = torch.where(expander_node_mask > 0, x, 0.0)
+        if expander_node_mask is not None:
+            x = x * expander_node_mask
 
         return self.propagate(edge_index, x=x, edge_attr = edge_embedding, norm=norm) + F.relu(x + self.root_emb.weight) * 1./deg.view(-1,1)
 

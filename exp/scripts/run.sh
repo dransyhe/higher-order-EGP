@@ -13,6 +13,6 @@ python -m exp.run \
     --expander=True \
     --expander_graph_generation_method=perfect-matchings \
     --expander_graph_order=3 \
-    --expander_edge_handling=summation-mlp \
+    --expander_edge_handling=summation \
     --feature=full \
     --filename=mol

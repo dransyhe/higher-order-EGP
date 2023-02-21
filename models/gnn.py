@@ -113,31 +113,25 @@ class GNN_node_expander(torch.nn.Module):
         self.expander_left_batch_norms = torch.nn.ModuleList()
         self.expander_right_convs = torch.nn.ModuleList()
         self.expander_right_batch_norms = torch.nn.ModuleList()
+        self.summation = torch.nn.ModuleList()
 
-        if self.expander_edge_handling in ["summation", "summation-mlp"]:
-            self.summation = SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False)
 
         for layer in range(num_layer):
             if gnn_type == 'gin':
                 self.convs.append(GINConv(emb_dim))
                 if self.expander_edge_handling not in ["summation", "summation-mlp"]:
-                    self.expander_left_convs.append(GINConv(emb_dim,
-                                                            # bias=False if self.expander_edge_handling == "masking" else True,
-                                                            flow="source_to_target"))
-                self.expander_right_convs.append(GINConv(emb_dim,
-                                                         # bias=False if self.expander_edge_handling == "masking" else True,
-                                                         flow="source_to_target"))
+                    self.expander_left_convs.append(GINConv(emb_dim, flow="source_to_target"))
+                self.expander_right_convs.append(GINConv(emb_dim, flow="source_to_target"))
             elif gnn_type == 'gcn':
                 self.convs.append(GCNConv(emb_dim))
                 if self.expander_edge_handling not in ["summation", "summation-mlp"]:
-                    self.expander_left_convs.append(GCNConv(emb_dim,
-                                                            # bias=False if self.expander_edge_handling == "masking" else True,
-                                                            flow="source_to_target"))
-                self.expander_right_convs.append(GCNConv(emb_dim,
-                                                         # bias=False if self.expander_edge_handling == "masking" else True,
-                                                         flow="source_to_target"))
+                    self.expander_left_convs.append(GCNConv(emb_dim, flow="source_to_target"))
+                self.expander_right_convs.append(GCNConv(emb_dim, flow="source_to_target"))
             else:
                 raise ValueError('Undefined GNN type called {}'.format(gnn_type))
+
+            if self.expander_edge_handling in ["summation", "summation-mlp"]:
+                self.summation.append(SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False))
 
             self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
             self.expander_left_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
@@ -162,11 +156,10 @@ class GNN_node_expander(torch.nn.Module):
 
         ### computing input node embedding
         h = self.atom_encoder(x)
-        # zeros = torch.zeros(h.shape)
-        # expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
-        # expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
-                                                       # h.shape[1])
-        # h = torch.where(expander_node_mask > 0, h, zeros)
+        expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
+        expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
+                                                       h.shape[1])
+        h = h * expander_node_mask
         h_list = [h]
         for layer in range(self.num_layer):
             # Propagation on the original graph
@@ -177,20 +170,23 @@ class GNN_node_expander(torch.nn.Module):
             # Propagation on the expander graph
             # from left to right
             if self.expander_edge_handling in ["summation", "summation-mlp"]:
-                # h = torch.where(expander_node_mask > 0, h, zeros)
-                h_edge = self.summation(h, expander_edge_index)
+                h = h * expander_node_mask
+                h_edge = self.summation[layer](h, expander_edge_index)
                 h = h + h_edge
             else:
+                if self.expander_edge_handling == "learn-features":
+                    pass_expander_node_mask = None
+                else:
+                    pass_expander_node_mask = expander_node_mask
                 h = self.propagate(self.expander_left_convs[layer],
                                    self.expander_left_batch_norms[layer],
-                                   h, expander_edge_index) # ,
-                                   # expander_node_mask=None if self.expander_edge_handling == "learn-features" else expander_node_mask)
+                                   h, expander_edge_index,
+                                   expander_node_mask=pass_expander_node_mask)
             # from right to left
             reverse_expander_edge_index = expander_edge_index[[1, 0]]
             h = self.propagate(self.expander_right_convs[layer],
                                self.expander_right_batch_norms[layer],
                                h, reverse_expander_edge_index,
-                               # expander_node_mask=None if self.expander_edge_handling == "learn-features" else expander_node_mask,
                                no_act=(layer == self.num_layer - 1))
 
             # TODO: (can have other options) now only saves h at the end of three propagations
