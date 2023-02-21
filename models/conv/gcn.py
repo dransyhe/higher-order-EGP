@@ -6,10 +6,13 @@ from torch_geometric.utils import degree
 
 
 class GCNConv(MessagePassing):
-    def __init__(self, emb_dim, bias=True):
-        super(GCNConv, self).__init__(aggr='add')
+    def __init__(self, emb_dim, bias=True, flow=None):
+        if flow is None:
+            super(GCNConv, self).__init__(aggr='add')
+        else:
+            super(GCNConv, self).__init__(aggr = "add", flow = flow)
 
-        self.linear = torch.nn.Linear(emb_dim, emb_dim, bias=bias)
+        self.linear = torch.nn.Linear(emb_dim, emb_dim)  # , bias=bias)
         self.root_emb = torch.nn.Embedding(1, emb_dim)
         self.bond_encoder = BondEncoder(emb_dim = emb_dim)
 
@@ -30,11 +33,11 @@ class GCNConv(MessagePassing):
         norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
 
         # set expander_node_feature to 0-vector
-        if expander_node_mask is not None:
-            expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
-            expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
-                                                           x.shape[1])
-            x = torch.where(expander_node_mask > 0, x, 0.0)
+        # if expander_node_mask is not None:
+        #     expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
+        #     expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
+        #                                                    x.shape[1])
+        #     x = torch.where(expander_node_mask > 0, x, 0.0)
 
         return self.propagate(edge_index, x=x, edge_attr = edge_embedding, norm=norm) + F.relu(x + self.root_emb.weight) * 1./deg.view(-1,1)
 

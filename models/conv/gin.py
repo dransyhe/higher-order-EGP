@@ -6,17 +6,20 @@ from ogb.graphproppred.mol_encoder import AtomEncoder,BondEncoder
 
 ### GIN convolution along the graph structure
 class GINConv(MessagePassing):
-    def __init__(self, emb_dim, bias=True):
+    def __init__(self, emb_dim, bias=True, flow=None):
         '''
             emb_dim (int): node embedding dimensionality
         '''
 
-        super(GINConv, self).__init__(aggr = "add")
+        if flow is None:
+            super(GINConv, self).__init__(aggr = "add")
+        else:
+            super(GINConv, self).__init__(aggr = "add", flow = flow)
 
-        self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, 2*emb_dim, bias=bias),
+        self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, 2*emb_dim), # , bias=bias),
                                        torch.nn.BatchNorm1d(2*emb_dim),
                                        torch.nn.ReLU(),
-                                       torch.nn.Linear(2*emb_dim, emb_dim, bias=bias))
+                                       torch.nn.Linear(2*emb_dim, emb_dim)) #, bias=bias))
         self.eps = torch.nn.Parameter(torch.Tensor([0]))
 
         self.bond_encoder = BondEncoder(emb_dim = emb_dim)
@@ -28,11 +31,11 @@ class GINConv(MessagePassing):
             edge_embedding = None
 
         # set expander_node_feature to 0-vector
-        if expander_node_mask is not None:
-            expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
-            expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
-                                                           x.shape[1])
-            x = torch.where(expander_node_mask > 0, x, 0.0)
+        # if expander_node_mask is not None:
+        #     expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
+        #     expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
+        #                                                    x.shape[1])
+        #     x = torch.where(expander_node_mask > 0, x, 0.0)
 
         out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x=x, edge_attr=edge_embedding))
 

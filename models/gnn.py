@@ -87,7 +87,7 @@ class GNN_node_expander(torch.nn.Module):
     """
 
     def __init__(self, num_layer, emb_dim, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin',
-                       expander_edge_handling="masking"):
+                       expander_edge_handling="learn-features"):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
@@ -113,17 +113,29 @@ class GNN_node_expander(torch.nn.Module):
         self.expander_left_batch_norms = torch.nn.ModuleList()
         self.expander_right_convs = torch.nn.ModuleList()
         self.expander_right_batch_norms = torch.nn.ModuleList()
-        self.summation = SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False)
+
+        if self.expander_edge_handling in ["summation", "summation-mlp"]:
+            self.summation = SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False)
 
         for layer in range(num_layer):
             if gnn_type == 'gin':
                 self.convs.append(GINConv(emb_dim))
-                self.expander_left_convs.append(GINConv(emb_dim, bias=False if self.expander_edge_handling == "masking" else True))
-                self.expander_right_convs.append(GINConv(emb_dim, bias=False if self.expander_edge_handling == "masking" else True))
+                if self.expander_edge_handling not in ["summation", "summation-mlp"]:
+                    self.expander_left_convs.append(GINConv(emb_dim,
+                                                            # bias=False if self.expander_edge_handling == "masking" else True,
+                                                            flow="source_to_target"))
+                self.expander_right_convs.append(GINConv(emb_dim,
+                                                         # bias=False if self.expander_edge_handling == "masking" else True,
+                                                         flow="source_to_target"))
             elif gnn_type == 'gcn':
                 self.convs.append(GCNConv(emb_dim))
-                self.expander_left_convs.append(GCNConv(emb_dim, bias=False if self.expander_edge_handling == "masking" else True))
-                self.expander_right_convs.append(GCNConv(emb_dim, bias=False if self.expander_edge_handling == "masking" else True))
+                if self.expander_edge_handling not in ["summation", "summation-mlp"]:
+                    self.expander_left_convs.append(GCNConv(emb_dim,
+                                                            # bias=False if self.expander_edge_handling == "masking" else True,
+                                                            flow="source_to_target"))
+                self.expander_right_convs.append(GCNConv(emb_dim,
+                                                         # bias=False if self.expander_edge_handling == "masking" else True,
+                                                         flow="source_to_target"))
             else:
                 raise ValueError('Undefined GNN type called {}'.format(gnn_type))
 
@@ -149,8 +161,13 @@ class GNN_node_expander(torch.nn.Module):
             batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
 
         ### computing input node embedding
-
-        h_list = [self.atom_encoder(x)]
+        h = self.atom_encoder(x)
+        # zeros = torch.zeros(h.shape)
+        # expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
+        # expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
+                                                       # h.shape[1])
+        # h = torch.where(expander_node_mask > 0, h, zeros)
+        h_list = [h]
         for layer in range(self.num_layer):
             # Propagation on the original graph
             h = self.propagate(self.convs[layer],
@@ -160,18 +177,20 @@ class GNN_node_expander(torch.nn.Module):
             # Propagation on the expander graph
             # from left to right
             if self.expander_edge_handling in ["summation", "summation-mlp"]:
-                h = self.summation(h, expander_edge_index)
+                # h = torch.where(expander_node_mask > 0, h, zeros)
+                h_edge = self.summation(h, expander_edge_index)
+                h = h + h_edge
             else:
                 h = self.propagate(self.expander_left_convs[layer],
                                    self.expander_left_batch_norms[layer],
-                                   h, expander_edge_index,
-                                   expander_node_mask=None if self.expander_edge_handling == "learn-features" else expander_node_mask)
+                                   h, expander_edge_index) # ,
+                                   # expander_node_mask=None if self.expander_edge_handling == "learn-features" else expander_node_mask)
             # from right to left
             reverse_expander_edge_index = expander_edge_index[[1, 0]]
             h = self.propagate(self.expander_right_convs[layer],
                                self.expander_right_batch_norms[layer],
                                h, reverse_expander_edge_index,
-                               expander_node_mask=None if self.expander_edge_handling == "learn-features" else expander_node_mask,
+                               # expander_node_mask=None if self.expander_edge_handling == "learn-features" else expander_node_mask,
                                no_act=(layer == self.num_layer - 1))
 
             # TODO: (can have other options) now only saves h at the end of three propagations
@@ -192,7 +211,7 @@ class GNN(torch.nn.Module):
 
     def __init__(self, num_tasks, num_layer=5, emb_dim=300,
                  gnn_type='gin', residual=False, drop_ratio=0.5, JK="last", graph_pooling="mean",
-                 expander=False, expander_edge_handling="masking"):
+                 expander=False, expander_edge_handling="learn-features"):
         '''
             num_tasks (int): number of labels to be predicted
             TODO: virtual_node (bool): whether to add virtual node or not

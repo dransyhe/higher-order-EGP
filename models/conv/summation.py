@@ -4,7 +4,7 @@ from torch_geometric.nn import MessagePassing
 
 class SumConv(MessagePassing):
     def __init__(self, emb_dim, mlp=False):
-        super(SumConv, self).__init__(aggr='add')
+        super(SumConv, self).__init__(aggr='add', flow="source_to_target")
         self.mlp = mlp
         self.linear = nn.Linear(emb_dim, emb_dim)
 
