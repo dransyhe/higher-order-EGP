@@ -193,7 +193,8 @@ def main():
 
     if not args.filename == '':
         torch.save({'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
-                    'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, args.filename)
+                    'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, args.filename + "_best")
+        torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, args.filename + "_curves")
         torch.save(model.state_dict(), args.filename + "model.pt")
 
 
