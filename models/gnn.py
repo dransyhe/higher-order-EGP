@@ -119,23 +119,27 @@ class GNN_node_expander(torch.nn.Module):
         for layer in range(num_layer):
             if gnn_type == 'gin':
                 self.convs.append(GINConv(emb_dim))
-                if self.expander_edge_handling not in ["summation", "summation-mlp"]:
-                    self.expander_left_convs.append(GINConv(emb_dim, flow="source_to_target"))
-                self.expander_right_convs.append(GINConv(emb_dim, flow="source_to_target"))
+                if layer != num_layer - 1:
+                    if self.expander_edge_handling not in ["summation", "summation-mlp"]:
+                        self.expander_left_convs.append(GINConv(emb_dim, flow="source_to_target"))
+                    self.expander_right_convs.append(GINConv(emb_dim, flow="source_to_target"))
             elif gnn_type == 'gcn':
                 self.convs.append(GCNConv(emb_dim))
-                if self.expander_edge_handling not in ["summation", "summation-mlp"]:
-                    self.expander_left_convs.append(GCNConv(emb_dim, flow="source_to_target"))
-                self.expander_right_convs.append(GCNConv(emb_dim, flow="source_to_target"))
+                if layer != num_layer - 1:
+                    if self.expander_edge_handling not in ["summation", "summation-mlp"]:
+                        self.expander_left_convs.append(GCNConv(emb_dim, flow="source_to_target"))
+                    self.expander_right_convs.append(GCNConv(emb_dim, flow="source_to_target"))
             else:
                 raise ValueError('Undefined GNN type called {}'.format(gnn_type))
 
-            if self.expander_edge_handling in ["summation", "summation-mlp"]:
-                self.summation.append(SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False))
-
             self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
-            self.expander_left_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
-            self.expander_right_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
+
+            if layer != num_layer - 1:
+                if self.expander_edge_handling in ["summation", "summation-mlp"]:
+                    self.summation.append(SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False))
+
+                self.expander_left_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
+                self.expander_right_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
 
     def propagate(self, conv, bn, h, edge_index, edge_attr=None, expander_node_mask=None, no_act=False):
         h_residual = h
@@ -168,26 +172,28 @@ class GNN_node_expander(torch.nn.Module):
                                h_list[layer], edge_index, edge_attr)
 
             # Propagation on the expander graph
-            # from left to right
-            if self.expander_edge_handling in ["summation", "summation-mlp"]:
-                h = h * expander_node_mask
-                h_edge = self.summation[layer](h, expander_edge_index)
-                h = h + h_edge
-            else:
-                if self.expander_edge_handling == "learn-features":
-                    pass_expander_node_mask = None
+            # from left to right. We don't do this in
+            # the final layer.
+            if layer != self.num_layer - 1:
+                if self.expander_edge_handling in ["summation", "summation-mlp"]:
+                    h = h * expander_node_mask
+                    h_edge = self.summation[layer](h, expander_edge_index)
+                    h = h + h_edge
                 else:
-                    pass_expander_node_mask = expander_node_mask
-                h = self.propagate(self.expander_left_convs[layer],
-                                   self.expander_left_batch_norms[layer],
-                                   h, expander_edge_index,
-                                   expander_node_mask=pass_expander_node_mask)
-            # from right to left
-            reverse_expander_edge_index = expander_edge_index[[1, 0]]
-            h = self.propagate(self.expander_right_convs[layer],
-                               self.expander_right_batch_norms[layer],
-                               h, reverse_expander_edge_index,
-                               no_act=(layer == self.num_layer - 1))
+                    if self.expander_edge_handling == "learn-features":
+                        pass_expander_node_mask = None
+                    else:
+                        pass_expander_node_mask = expander_node_mask
+                    h = self.propagate(self.expander_left_convs[layer],
+                                       self.expander_left_batch_norms[layer],
+                                       h, expander_edge_index,
+                                       expander_node_mask=pass_expander_node_mask)
+                # from right to left
+                reverse_expander_edge_index = expander_edge_index[[1, 0]]
+                h = self.propagate(self.expander_right_convs[layer],
+                                   self.expander_right_batch_norms[layer],
+                                   h, reverse_expander_edge_index,
+                                   no_act=(layer == self.num_layer - 1))
 
             # TODO: (can have other options) now only saves h at the end of three propagations
             h_list.append(h)
