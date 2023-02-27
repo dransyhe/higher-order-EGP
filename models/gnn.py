@@ -167,9 +167,12 @@ class GNN_node_expander(torch.nn.Module):
         h_list = [h]
         for layer in range(self.num_layer):
             # Propagation on the original graph
+            no_act = False
+            if layer == self.num_layer - 1:
+                no_act = True
             h = self.propagate(self.convs[layer],
                                self.batch_norms[layer],
-                               h_list[layer], edge_index, edge_attr)
+                               h_list[layer], edge_index, edge_attr, no_act=no_act)
 
             # Propagation on the expander graph
             # from left to right. We don't do this in
@@ -192,8 +195,7 @@ class GNN_node_expander(torch.nn.Module):
                 reverse_expander_edge_index = expander_edge_index[[1, 0]]
                 h = self.propagate(self.expander_right_convs[layer],
                                    self.expander_right_batch_norms[layer],
-                                   h, reverse_expander_edge_index,
-                                   no_act=(layer == self.num_layer - 1))
+                                   h, reverse_expander_edge_index)
 
             # TODO: (can have other options) now only saves h at the end of three propagations
             h_list.append(h)
