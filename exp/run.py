@@ -15,7 +15,6 @@ from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
 cls_criterion = torch.nn.BCEWithLogitsLoss()
 reg_criterion = torch.nn.MSELoss()
-expander_graph_generation_functions = {"perfect-matchings": expander_graph_generation.add_expander_edges_via_perfect_matchings}
 
 
 def str2bool(x):
@@ -96,11 +95,13 @@ def main():
                         help='dataset name (default: ogbg-molhiv)')
     parser.add_argument('--expander', dest='expander', type=str2bool, default=False,
                         help='whether to use expander graph propagation')
-    parser.add_argument('--expander_graph_generation_method', type=str, default="perfect-matchings",
-                        choices=['perfect-matchings'],
+    parser.add_argument('--expander_graph_generation_method', type=str, default="ramanujan-bipartite",
+                        choices=['perfect-matchings', 'ramanujan-bipartite'],
                         help='method for generating expander graph')
     parser.add_argument('--expander_graph_order', type=int, default=3,
                         help='order of hypergraph expander graph')
+    parser.add_argument('--random_seed', type=int, default=42,
+                        help='random seed used when generating ramanujan bipartite graphs')
     parser.add_argument('--expander_edge_handling', type=str, default='masking',
                         choices=['masking', 'learn-features', 'summation', 'summation-mlp'],
                         help='method to handle expander edge nodes')
@@ -113,9 +114,13 @@ def main():
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
     expander_graph_generation_fn = None
-    if args.expander_graph_generation_method is not None:
-        expander_graph_generation_fn = functools.partial(expander_graph_generation_functions[args.expander_graph_generation_method],
+    if args.expander_graph_generation_method == "perfect-matchings":
+        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings,
                                                          args.expander_graph_order)
+    elif args.expander_graph_generation_method == "ramanujan-bipartite":
+        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
+                                                         args.expander_graph_order,
+                                                         args.random_seed)
 
     ### automatic dataloading and splitting
     if not args.expander:
