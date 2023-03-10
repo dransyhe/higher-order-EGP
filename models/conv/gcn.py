@@ -6,20 +6,28 @@ from torch_geometric.utils import degree
 
 
 class GCNConv(MessagePassing):
-    def __init__(self, emb_dim, bias=True, flow=None):
+    def __init__(self, emb_dim, task, flow=None):
         if flow is None:
             super(GCNConv, self).__init__(aggr='add')
         else:
             super(GCNConv, self).__init__(aggr = "add", flow = flow)
 
-        self.linear = torch.nn.Linear(emb_dim, emb_dim)  # , bias=bias)
+        self.linear = torch.nn.Linear(emb_dim, emb_dim)
         self.root_emb = torch.nn.Embedding(1, emb_dim)
-        self.bond_encoder = BondEncoder(emb_dim = emb_dim)
+        if task == "mol":
+            self.edge_encoder = BondEncoder(emb_dim = emb_dim)
+        elif task == "ppo":
+            self.edge_encoder = torch.nn.Linear(7, emb_dim)
+        elif task == "code2":
+            self.edge_encoder = torch.nn.Linear(2, emb_dim)
+        else:
+            raise NotImplementedError
 
     def forward(self, x, edge_index, edge_attr=None, expander_node_mask=None):
         x = self.linear(x)
         if edge_attr is not None:
-            edge_embedding = self.bond_encoder(edge_attr)
+            edge_embedding = self.edge_encoder(edge_attr)
+
         else:
             edge_embedding = None
 

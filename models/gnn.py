@@ -15,7 +15,7 @@ class GNN_node(torch.nn.Module):
         node representations
     """
 
-    def __init__(self, num_layer, emb_dim, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin'):
+    def __init__(self, num_layer, emb_dim, task, node_encoder=None, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin'):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
@@ -31,7 +31,13 @@ class GNN_node(torch.nn.Module):
         if self.num_layer < 2:
             raise ValueError("Number of GNN layers must be greater than 1.")
 
-        self.atom_encoder = AtomEncoder(emb_dim)
+        if task == "mol":
+            self.node_encoder = AtomEncoder(emb_dim)
+        elif task == "ppa":
+            self.node_encoder = torch.nn.Embedding(1, emb_dim)
+        elif task == "code2":
+            assert (node_encoder is not None)
+            self.node_encoder = node_encoder
 
         ###List of GNNs
         self.convs = torch.nn.ModuleList()
@@ -39,9 +45,9 @@ class GNN_node(torch.nn.Module):
 
         for layer in range(num_layer):
             if gnn_type == 'gin':
-                self.convs.append(GINConv(emb_dim))
+                self.convs.append(GINConv(emb_dim, task))
             elif gnn_type == 'gcn':
-                self.convs.append(GCNConv(emb_dim))
+                self.convs.append(GCNConv(emb_dim, task))
             else:
                 raise ValueError('Undefined GNN type called {}'.format(gnn_type))
 
@@ -52,7 +58,7 @@ class GNN_node(torch.nn.Module):
 
         ### computing input node embedding
 
-        h_list = [self.atom_encoder(x)]
+        h_list = [self.node_encoder(x)]
         for layer in range(self.num_layer):
 
             h = self.convs[layer](h_list[layer], edge_index, edge_attr)
@@ -86,7 +92,7 @@ class GNN_node_expander(torch.nn.Module):
         node representations
     """
 
-    def __init__(self, num_layer, emb_dim, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin',
+    def __init__(self, num_layer, emb_dim, task, node_encoder=None, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin',
                        expander_edge_handling="learn-features"):
         '''
             emb_dim (int): node embedding dimensionality
@@ -97,6 +103,7 @@ class GNN_node_expander(torch.nn.Module):
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
         self.JK = JK
+        self.task = task
         ### add residual connection or not
         self.residual = residual
         self.expander_edge_handling = expander_edge_handling
@@ -104,7 +111,13 @@ class GNN_node_expander(torch.nn.Module):
         if self.num_layer < 2:
             raise ValueError("Number of GNN layers must be greater than 1.")
 
-        self.atom_encoder = AtomEncoder(emb_dim)
+        if task == "mol":
+            self.node_encoder = AtomEncoder(emb_dim)
+        elif task == "ppa":
+            self.node_encoder = torch.nn.Embedding(1, emb_dim)
+        elif task == "code2":
+            assert (node_encoder is not None)
+            self.node_encoder = node_encoder
 
         ###List of GNNs
         self.convs = torch.nn.ModuleList()
@@ -118,17 +131,17 @@ class GNN_node_expander(torch.nn.Module):
 
         for layer in range(num_layer):
             if gnn_type == 'gin':
-                self.convs.append(GINConv(emb_dim))
+                self.convs.append(GINConv(emb_dim, task))
                 if layer != num_layer - 1:
                     if self.expander_edge_handling not in ["summation", "summation-mlp"]:
-                        self.expander_left_convs.append(GINConv(emb_dim, flow="source_to_target"))
-                    self.expander_right_convs.append(GINConv(emb_dim, flow="source_to_target"))
+                        self.expander_left_convs.append(GINConv(emb_dim, task, flow="source_to_target"))
+                    self.expander_right_convs.append(GINConv(emb_dim, task, flow="source_to_target"))
             elif gnn_type == 'gcn':
-                self.convs.append(GCNConv(emb_dim))
+                self.convs.append(GCNConv(emb_dim, task))
                 if layer != num_layer - 1:
                     if self.expander_edge_handling not in ["summation", "summation-mlp"]:
-                        self.expander_left_convs.append(GCNConv(emb_dim, flow="source_to_target"))
-                    self.expander_right_convs.append(GCNConv(emb_dim, flow="source_to_target"))
+                        self.expander_left_convs.append(GCNConv(emb_dim, task, flow="source_to_target"))
+                    self.expander_right_convs.append(GCNConv(emb_dim, task, flow="source_to_target"))
             else:
                 raise ValueError('Undefined GNN type called {}'.format(gnn_type))
 
@@ -154,12 +167,19 @@ class GNN_node_expander(torch.nn.Module):
         return h
 
     def forward(self, batched_data):
-        x, edge_index, edge_attr, batch, expander_edge_index, expander_node_mask, num_nodes = \
-            batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch, \
-            batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
-
         ### computing input node embedding
-        h = self.atom_encoder(x)
+        if self.task == "code2":
+            # It has an additional node_depth
+            x, edge_index, edge_attr, node_depth, batch, expander_edge_index, expander_node_mask, num_nodes = \
+                batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.node_depth,  batched_data.batch, \
+                batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
+            h = self.node_encoder(x, node_depth.view(-1, ))
+        else:
+            x, edge_index, edge_attr, batch, expander_edge_index, expander_node_mask, num_nodes = \
+                batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch, \
+                batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
+            h = self.node_encoder(x)
+
         expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
         expander_node_mask = expander_node_mask.expand(expander_node_mask.shape[0],
                                                        h.shape[1])
@@ -213,7 +233,7 @@ class GNN_node_expander(torch.nn.Module):
 
 class GNN(torch.nn.Module):
 
-    def __init__(self, num_tasks, num_layer=5, emb_dim=300,
+    def __init__(self, task, num_class, max_seq_len=None, node_encoder=None, num_layer=5, emb_dim=300,
                  gnn_type='gin', residual=False, drop_ratio=0.5, JK="last", graph_pooling="mean",
                  expander=False, expander_edge_handling="learn-features"):
         '''
@@ -227,7 +247,11 @@ class GNN(torch.nn.Module):
         self.drop_ratio = drop_ratio
         self.JK = JK
         self.emb_dim = emb_dim
-        self.num_tasks = num_tasks
+        self.num_class = num_class
+        self.task = task
+        if self.task == "code2":
+            assert (max_seq_len is not None)
+            self.max_seq_len = max_seq_len
         self.graph_pooling = graph_pooling
         self.expander = expander
 
@@ -236,10 +260,11 @@ class GNN(torch.nn.Module):
 
         ### GNN to generate node embeddings
         if not expander:
-            self.gnn_node = GNN_node(num_layer, emb_dim, JK=JK, drop_ratio=drop_ratio, residual=residual,
-                                     gnn_type=gnn_type)
+            self.gnn_node = GNN_node(num_layer, emb_dim, task=task, node_encoder=node_encoder, JK=JK,
+                                     drop_ratio=drop_ratio, residual=residual, gnn_type=gnn_type)
         else:
-            self.gnn_node = GNN_node_expander(num_layer, emb_dim, JK=JK, drop_ratio=drop_ratio, residual=residual,
+            self.gnn_node = GNN_node_expander(num_layer, emb_dim, task=task, node_encoder=node_encoder, JK=JK,
+                                              drop_ratio=drop_ratio, residual=residual,
                                               gnn_type=gnn_type, expander_edge_handling=expander_edge_handling)
 
         ### Pooling function to generate whole-graph embeddings
@@ -259,9 +284,19 @@ class GNN(torch.nn.Module):
             raise ValueError("Invalid graph pooling type.")
 
         if graph_pooling == "set2set":
-            self.graph_pred_linear = torch.nn.Linear(2 * self.emb_dim, self.num_tasks)
+            if self.task == "code2":
+                self.graph_pred_linear_list = []
+                for i in range(self.max_seq_len):
+                    self.graph_pred_linear_list.append(torch.nn.Linear(2*emb_dim, self.num_class))
+            else:
+                self.graph_pred_linear = torch.nn.Linear(2 * self.emb_dim, self.num_class)
         else:
-            self.graph_pred_linear = torch.nn.Linear(self.emb_dim, self.num_tasks)
+            if self.task == "code2":
+                self.graph_pred_linear_list = []
+                for i in range(self.max_seq_len):
+                    self.graph_pred_linear_list.append(torch.nn.Linear(emb_dim, self.num_class))
+            else:
+                self.graph_pred_linear = torch.nn.Linear(self.emb_dim, self.num_class)
 
     def forward(self, batched_data):
         h_node = self.gnn_node(batched_data)
@@ -276,8 +311,14 @@ class GNN(torch.nn.Module):
         else:
             h_graph = self.pool(h_node, batched_data.batch)
 
-        return self.graph_pred_linear(h_graph)
+        if self.task == "code2":
+            pred_list = []
+            for i in range(self.max_seq_len):
+                pred_list.append(self.graph_pred_linear[i](h_graph))
+            return pred_list
+        else:
+            return self.graph_pred_linear(h_graph)
 
 
 if __name__ == '__main__':
-    GNN(num_tasks=10)
+    GNN(num_class=10)
