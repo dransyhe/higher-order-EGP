@@ -112,18 +112,20 @@ def main():
     if args.expander_graph_generation_method == "perfect-matchings":
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_perfect_matchings,
-            args.expander_graph_order)
+            args.expander_graph_order,
+            True)
     elif args.expander_graph_generation_method == "ramanujan-bipartite":
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
             args.expander_graph_order,
-            args.random_seed)
+            args.random_seed,
+            True)
 
     ### automatic dataloading and splitting
     if not args.expander:
         dataset = PygGraphPropPredDataset(name=args.dataset, transform=add_zeros)
     else:
-        dataset = PygGraphPropPredDataset(name=args.dataset, transform=add_zeros, pre_transform=expander_graph_generation_fn)
+        dataset = PygGraphPropPredDataset(name=args.dataset, pre_transform=expander_graph_generation_fn)
 
     split_idx = dataset.get_idx_split()
 
@@ -152,6 +154,7 @@ def main():
     test_curve = []
     train_curve = []
 
+    best_val_so_far = 0
     for epoch in range(1, args.epochs + 1):
         print("=====Epoch {}".format(epoch))
         print('Training...')
@@ -167,6 +170,11 @@ def main():
         train_curve.append(train_perf[dataset.eval_metric])
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
+        if valid_perf > best_val_so_far:
+            # TODO: Check how long saving the model takes (shouldn't be too long) so we don't slow the training process
+            start_time = time.time()
+            torch.save(model.state_dict(), args.filename + "best_val_model.pt")
+            print(f"Time taken to save model: {time.time() - start_time}")
 
     best_val_epoch = np.argmax(np.array(valid_curve))
     best_train = max(train_curve)
@@ -177,7 +185,9 @@ def main():
 
     if not args.filename == '':
         torch.save({'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
-                    'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, args.filename)
+                    'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, args.filename + "_best")
+        torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, args.filename + "_curves")
+        torch.save(model.state_dict(), args.filename + "final_model.pt")
 
 
 if __name__ == "__main__":

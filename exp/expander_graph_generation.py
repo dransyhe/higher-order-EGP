@@ -8,6 +8,7 @@ from torch_geometric.utils import coalesce, convert
 
 
 def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
+                                             ppa: bool,
                                              data: Data):
     """
     Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
@@ -21,8 +22,12 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
                              'hypergraph', though some 'edges' may be of a lower order as we don't enforce that the
                              matchings are disjoint.
     :param data: graph to be augmented
+    :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
     :return: updated graph with additional attributes for expander graph
     """
+    if ppa:
+        # ppa dataset requires manual addition of node features
+        data.x = torch.zeros(data.num_nodes, dtype=torch.long)
     new_data = data
     num_nodes = data.x.shape[0]
     expander_graph_edge_nodes = torch.zeros(data.x.shape, dtype=data.x.dtype)
@@ -55,6 +60,7 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
 
 def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
                                                      random_seed: int,
+                                                     ppa: bool,
                                                      data: Data):
     """
      Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
@@ -70,8 +76,12 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
      :param hypergraph_order: number of perfect matchings to generate. This is the order of the resulting 'hypergraph'.
      :param random_seed: random seed for generating the expander graphs.
      :param data: graph to be augmented
+     :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
      :return: updated graph with additional attributes for expander graph
      """
+    if ppa:
+        # ppa dataset requires manual addition of node features
+        data.x = torch.zeros(data.num_nodes, dtype=torch.long)
     new_data = data
     num_nodes = data.x.shape[0]
     expander_graph_edge_nodes = torch.zeros(data.x.shape, dtype=data.x.dtype)

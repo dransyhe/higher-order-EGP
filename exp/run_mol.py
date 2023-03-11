@@ -1,6 +1,7 @@
 import functools
 import argparse
 import numpy as np
+import time
 import torch
 import torch.optim as optim
 from tqdm import tqdm
@@ -87,7 +88,7 @@ def main():
     parser.add_argument('--dataset', type=str, default="ogbg-molhiv",
                         choices=['ogbg-molhiv', 'ogbg-molpcba'],
                         help='dataset name (default: ogbg-molhiv)')
-    parser.add_argument('--expander', dest='expander', type=str2bool, default=False,
+    parser.add_argument('--expander', dest='expander', type=str2bool, default=True,
                         help='whether to use expander graph propagation')
     parser.add_argument('--expander_graph_generation_method', type=str, default="ramanujan-bipartite",
                         choices=['perfect-matchings', 'ramanujan-bipartite'],
@@ -110,11 +111,13 @@ def main():
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
         expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings,
-                                                         args.expander_graph_order)
+                                                         args.expander_graph_order,
+                                                         False)
     elif args.expander_graph_generation_method == "ramanujan-bipartite":
         expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
                                                          args.expander_graph_order,
-                                                         args.random_seed)
+                                                         args.random_seed,
+                                                         False)
 
     ### automatic dataloading and splitting
     if not args.expander:
@@ -157,6 +160,7 @@ def main():
     test_curve = []
     train_curve = []
 
+    best_val_so_far = 0
     for epoch in range(1, args.epochs + 1):
         print("=====Epoch {}".format(epoch))
         print('Training...')
@@ -172,6 +176,11 @@ def main():
         train_curve.append(train_perf[dataset.eval_metric])
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
+        if 'classification' in dataset.task_type and valid_perf > best_val_so_far:
+            # TODO: Check how long saving the model takes (shouldn't be too long) so we don't slow the training process
+            start_time = time.time()
+            torch.save(model.state_dict(), args.filename + "best_val_model.pt")
+            print(f"Time taken to save model: {time.time() - start_time}")
 
     if 'classification' in dataset.task_type:
         best_val_epoch = np.argmax(np.array(valid_curve))
@@ -188,7 +197,7 @@ def main():
         torch.save({'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
                     'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, args.filename + "_best")
         torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, args.filename + "_curves")
-        torch.save(model.state_dict(), args.filename + "model.pt")
+        torch.save(model.state_dict(), args.filename + "final_model.pt")
 
 
 if __name__ == "__main__":
