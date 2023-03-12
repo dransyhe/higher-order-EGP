@@ -27,6 +27,9 @@ class GINConv(MessagePassing):
             self.edge_encoder = torch.nn.Linear(7, emb_dim)
         elif task == "code2":
             self.edge_encoder = torch.nn.Linear(2, emb_dim)
+        elif task == "tree_neighbours_match":
+            # TODO: Double check that they don't use edge encodings
+            self.edge_encoder = None
         else:
             raise NotImplementedError
 

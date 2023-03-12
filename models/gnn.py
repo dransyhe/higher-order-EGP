@@ -15,13 +15,15 @@ class GNN_node(torch.nn.Module):
         node representations
     """
 
-    def __init__(self, num_layer, emb_dim, task, node_encoder=None, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin'):
+    def __init__(self, num_layer, emb_dim, task, node_encoder=None, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin',
+                 tree_neighbours_dim0=None):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
         '''
 
         super(GNN_node, self).__init__()
+        self.task = task
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
         self.JK = JK
@@ -38,6 +40,9 @@ class GNN_node(torch.nn.Module):
         elif task == "code2":
             assert (node_encoder is not None)
             self.node_encoder = node_encoder
+        elif task == "tree_neighbours_match":
+            self._keys_encoder = torch.nn.Embedding(num_embeddings=tree_neighbours_dim0 + 1, embedding_dim=emb_dim)
+            self._values_encoder = torch.nn.Embedding(num_embeddings=tree_neighbours_dim0 + 1, embedding_dim=emb_dim)
 
         ###List of GNNs
         self.convs = torch.nn.ModuleList()
@@ -54,11 +59,19 @@ class GNN_node(torch.nn.Module):
             self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
 
     def forward(self, batched_data):
-        x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
-
+        if self.task == "tree_neighbours_match":
+            x, edge_index, edge_attr, batch, roots = batched_data.x, batched_data.edge_index, batched_data.edge_attr, \
+                batched_data.batch, batched_data.root_mask
+            x_key, x_val = x[:, 0], x[:, 1]
+            x_key_embed = self._keys_encoder(x_key)
+            x_val_embed = self._values_encoder(x_val)
+            h = x_key_embed + x_val_embed
+        else:
+            x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
+            h = self.node_encoder(x)
         ### computing input node embedding
 
-        h_list = [self.node_encoder(x)]
+        h_list = [h]
         for layer in range(self.num_layer):
 
             h = self.convs[layer](h_list[layer], edge_index, edge_attr)
@@ -78,10 +91,14 @@ class GNN_node(torch.nn.Module):
         ### Different implementations of Jk-concat
         if self.JK == "last":
             node_representation = h_list[-1]
-        elif self.JK == "sum":
+        elif self.JK == "sum" and self.task != "tree_neighbours_match":
             node_representation = 0
             for layer in range(self.num_layer + 1):
                 node_representation += h_list[layer]
+        else:
+            # TODO: I believe that the original implementation (https://github.com/tech-srl/bottleneck/blob/main/models/graph_model.py)
+            #       only uses the last node representations, not sum
+            raise Exception("tree_neighbours_match should only be used with the last ")
 
         return node_representation
 
@@ -235,7 +252,8 @@ class GNN(torch.nn.Module):
 
     def __init__(self, task, num_class, max_seq_len=None, node_encoder=None, num_layer=5, emb_dim=300,
                  gnn_type='gin', residual=False, drop_ratio=0.5, JK="last", graph_pooling="mean",
-                 expander=False, expander_edge_handling="learn-features"):
+                 expander=False, expander_edge_handling="learn-features", tree_neighbours_dim0=None,
+                 tree_neighbours_out_dim=None):
         '''
             num_tasks (int): number of labels to be predicted
             TODO: virtual_node (bool): whether to add virtual node or not
@@ -253,6 +271,8 @@ class GNN(torch.nn.Module):
             assert (max_seq_len is not None)
             self.max_seq_len = max_seq_len
         self.graph_pooling = graph_pooling
+        self.tree_neighbours_out_layer = torch.nn.Linear(in_features=emb_dim, out_features=tree_neighbours_out_dim + 1,
+                                                         bias=False)
         self.expander = expander
 
         if self.num_layer < 2:
@@ -261,7 +281,7 @@ class GNN(torch.nn.Module):
         ### GNN to generate node embeddings
         if not expander:
             self.gnn_node = GNN_node(num_layer, emb_dim, task=task, node_encoder=node_encoder, JK=JK,
-                                     drop_ratio=drop_ratio, residual=residual, gnn_type=gnn_type)
+                                     drop_ratio=drop_ratio, residual=residual, gnn_type=gnn_type, tree_neighbours_dim0=tree_neighbours_dim0)
         else:
             self.gnn_node = GNN_node_expander(num_layer, emb_dim, task=task, node_encoder=node_encoder, JK=JK,
                                               drop_ratio=drop_ratio, residual=residual,
@@ -316,6 +336,11 @@ class GNN(torch.nn.Module):
             for i in range(self.max_seq_len):
                 pred_list.append(self.graph_pred_linear[i](h_graph))
             return pred_list
+        elif self.task == "tree_neighbours_match":
+            roots = batched_data.root_mask
+            root_nodes = h_node[roots]
+            logits = self.tree_neighbours_out_layer(root_nodes)
+            return logits
         else:
             return self.graph_pred_linear(h_graph)
 
