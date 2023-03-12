@@ -1,32 +1,26 @@
 import functools
-import argparse
-import numpy as np
 import torch
-import torch.optim as optim
-from distutils.util import strtobool
-from tqdm import tqdm
 from torch_geometric.loader import DataLoader
-
+import torch.optim as optim
+import torch.nn.functional as F
 from models.gnn import GNN
 from exp import expander_graph_generation
+
+from tqdm import tqdm
+import argparse
+import time
+import numpy as np
 
 ### importing OGB
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
-cls_criterion = torch.nn.BCEWithLogitsLoss()
-reg_criterion = torch.nn.MSELoss()
+### importing utils
+from models.utils import str2bool
+
+multicls_criterion = torch.nn.CrossEntropyLoss()
 
 
-def str2bool(x):
-    if type(x) == bool:
-        return x
-    elif type(x) == str:
-        return bool(strtobool(x))
-    else:
-        raise ValueError(f'Unrecognised type {type(x)}')
-
-
-def train(model, device, loader, optimizer, task_type):
+def train(model, device, loader, optimizer):
     model.train()
 
     for step, batch in enumerate(tqdm(loader, desc="Iteration")):
@@ -37,12 +31,9 @@ def train(model, device, loader, optimizer, task_type):
         else:
             pred = model(batch)
             optimizer.zero_grad()
-            ## ignore nan targets (unlabeled) when computing training loss.
-            is_labeled = batch.y == batch.y
-            if "classification" in task_type:
-                loss = cls_criterion(pred.to(torch.float32)[is_labeled], batch.y.to(torch.float32)[is_labeled])
-            else:
-                loss = reg_criterion(pred.to(torch.float32)[is_labeled], batch.y.to(torch.float32)[is_labeled])
+
+            loss = multicls_criterion(pred.to(torch.float32), batch.y.view(-1, ))
+
             loss.backward()
             optimizer.step()
 
@@ -61,8 +52,8 @@ def eval(model, device, loader, evaluator):
             with torch.no_grad():
                 pred = model(batch)
 
-            y_true.append(batch.y.view(pred.shape).detach().cpu())
-            y_pred.append(pred.detach().cpu())
+            y_true.append(batch.y.view(-1, 1).detach().cpu())
+            y_pred.append(torch.argmax(pred.detach(), dim=1).view(-1, 1).cpu())
 
     y_true = torch.cat(y_true, dim=0).numpy()
     y_pred = torch.cat(y_pred, dim=0).numpy()
@@ -72,13 +63,18 @@ def eval(model, device, loader, evaluator):
     return evaluator.eval(input_dict)
 
 
+def add_zeros(data):
+    data.x = torch.zeros(data.num_nodes, dtype=torch.long)
+    return data
+
+
 def main():
     # Training settings
-    parser = argparse.ArgumentParser(description='GNN baselines on ogbgmol* data with Pytorch Geometrics')
+    parser = argparse.ArgumentParser(description='GNN baselines on ogbg-ppa data with Pytorch Geometrics')
     parser.add_argument('--device', type=int, default=0,
                         help='which gpu to use if any (default: 0)')
-    parser.add_argument('--gnn', type=str, default='gcn',
-                        help='GNN gin or gcn, (default: gcn)')
+    parser.add_argument('--gnn', type=str, default='gin-virtual',
+                        help='GNN gin, gin-virtual, or gcn, or gcn-virtual (default: gin-virtual)')
     parser.add_argument('--drop_ratio', type=float, default=0.5,
                         help='dropout ratio (default: 0.5)')
     parser.add_argument('--num_layer', type=int, default=5,
@@ -91,8 +87,9 @@ def main():
                         help='number of epochs to train (default: 100)')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='number of workers (default: 0)')
-    parser.add_argument('--dataset', type=str, default="ogbg-molhiv",
-                        help='dataset name (default: ogbg-molhiv)')
+    parser.add_argument('--dataset', type=str, default="ogbg-ppa",
+                        choices = ["ogbg-ppa"],
+                        help='dataset name (default: ogbg-ppa)')
     parser.add_argument('--expander', dest='expander', type=str2bool, default=False,
                         help='whether to use expander graph propagation')
     parser.add_argument('--expander_graph_generation_method', type=str, default="ramanujan-bipartite",
@@ -105,8 +102,6 @@ def main():
     parser.add_argument('--expander_edge_handling', type=str, default='masking',
                         choices=['masking', 'learn-features', 'summation', 'summation-mlp'],
                         help='method to handle expander edge nodes')
-    parser.add_argument('--feature', type=str, default="full",
-                        help='full feature or simple feature')
     parser.add_argument('--filename', type=str, default="",
                         help='filename to output result (default: )')
     args = parser.parse_args()
@@ -115,26 +110,22 @@ def main():
 
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
-        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings,
-                                                         args.expander_graph_order)
+        expander_graph_generation_fn = functools.partial(
+            expander_graph_generation.add_expander_edges_via_perfect_matchings,
+            args.expander_graph_order,
+            True)
     elif args.expander_graph_generation_method == "ramanujan-bipartite":
-        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
-                                                         args.expander_graph_order,
-                                                         args.random_seed)
+        expander_graph_generation_fn = functools.partial(
+            expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
+            args.expander_graph_order,
+            args.random_seed,
+            True)
 
     ### automatic dataloading and splitting
     if not args.expander:
-        dataset = PygGraphPropPredDataset(name=args.dataset)
+        dataset = PygGraphPropPredDataset(name=args.dataset, transform=add_zeros)
     else:
         dataset = PygGraphPropPredDataset(name=args.dataset, pre_transform=expander_graph_generation_fn)
-
-    if args.feature == 'full':
-        pass
-    elif args.feature == 'simple':
-        print('using simple feature')
-        # only retain the top two node/edge features
-        dataset.data.x = dataset.data.x[:, :2]
-        dataset.data.edge_attr = dataset.data.edge_attr[:, :2]
 
     split_idx = dataset.get_idx_split()
 
@@ -149,17 +140,11 @@ def main():
                              num_workers=args.num_workers)
 
     if args.gnn == 'gin':
-        model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
+        model = GNN(gnn_type='gin', task="mol", num_class=dataset.num_classes, num_layer=args.num_layer, emb_dim=args.emb_dim,
                     drop_ratio=args.drop_ratio, expander=args.expander, expander_edge_handling=args.expander_edge_handling).to(device)
-    # elif args.gnn == 'gin-virtual':
-    #     model = GNN(gnn_type='gin', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-    #                 drop_ratio=args.drop_ratio, virtual_node=True).to(device)
     elif args.gnn == 'gcn':
-        model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
+        model = GNN(gnn_type='gcn', task="mol", num_class=dataset.num_classes, num_layer=args.num_layer, emb_dim=args.emb_dim,
                     drop_ratio=args.drop_ratio, expander=args.expander, expander_edge_handling=args.expander_edge_handling).to(device)
-    # elif args.gnn == 'gcn-virtual':
-    #     model = GNN(gnn_type='gcn', num_tasks=dataset.num_tasks, num_layer=args.num_layer, emb_dim=args.emb_dim,
-    #                 drop_ratio=args.drop_ratio, virtual_node=True).to(device)
     else:
         raise ValueError('Invalid GNN type')
 
@@ -169,10 +154,11 @@ def main():
     test_curve = []
     train_curve = []
 
+    best_val_so_far = 0
     for epoch in range(1, args.epochs + 1):
         print("=====Epoch {}".format(epoch))
         print('Training...')
-        train(model, device, train_loader, optimizer, dataset.task_type)
+        train(model, device, train_loader, optimizer)
 
         print('Evaluating...')
         train_perf = eval(model, device, train_loader, evaluator)
@@ -184,13 +170,14 @@ def main():
         train_curve.append(train_perf[dataset.eval_metric])
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
+        if valid_perf > best_val_so_far:
+            # TODO: Check how long saving the model takes (shouldn't be too long) so we don't slow the training process
+            start_time = time.time()
+            torch.save(model.state_dict(), args.filename + "best_val_model.pt")
+            print(f"Time taken to save model: {time.time() - start_time}")
 
-    if 'classification' in dataset.task_type:
-        best_val_epoch = np.argmax(np.array(valid_curve))
-        best_train = max(train_curve)
-    else:
-        best_val_epoch = np.argmin(np.array(valid_curve))
-        best_train = min(train_curve)
+    best_val_epoch = np.argmax(np.array(valid_curve))
+    best_train = max(train_curve)
 
     print('Finished training!')
     print('Best validation score: {}'.format(valid_curve[best_val_epoch]))
@@ -200,9 +187,8 @@ def main():
         torch.save({'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
                     'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, args.filename + "_best")
         torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, args.filename + "_curves")
-        torch.save(model.state_dict(), args.filename + "model.pt")
+        torch.save(model.state_dict(), args.filename + "final_model.pt")
 
 
 if __name__ == "__main__":
-    # import pdb; pdb.set_trace()
     main()

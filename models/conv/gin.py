@@ -6,7 +6,7 @@ from ogb.graphproppred.mol_encoder import AtomEncoder,BondEncoder
 
 ### GIN convolution along the graph structure
 class GINConv(MessagePassing):
-    def __init__(self, emb_dim, bias=True, flow=None):
+    def __init__(self, emb_dim, task, flow=None):
         '''
             emb_dim (int): node embedding dimensionality
         '''
@@ -16,17 +16,23 @@ class GINConv(MessagePassing):
         else:
             super(GINConv, self).__init__(aggr = "add", flow = flow)
 
-        self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, 2*emb_dim), # , bias=bias),
+        self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, 2*emb_dim),
                                        torch.nn.BatchNorm1d(2*emb_dim),
                                        torch.nn.ReLU(),
-                                       torch.nn.Linear(2*emb_dim, emb_dim)) #, bias=bias))
+                                       torch.nn.Linear(2*emb_dim, emb_dim))
         self.eps = torch.nn.Parameter(torch.Tensor([0]))
-
-        self.bond_encoder = BondEncoder(emb_dim = emb_dim)
+        if task == "mol":
+            self.edge_encoder = BondEncoder(emb_dim=emb_dim)
+        elif task == "ppo":
+            self.edge_encoder = torch.nn.Linear(7, emb_dim)
+        elif task == "code2":
+            self.edge_encoder = torch.nn.Linear(2, emb_dim)
+        else:
+            raise NotImplementedError
 
     def forward(self, x, edge_index, edge_attr=None, expander_node_mask=None):
         if edge_attr is not None:
-            edge_embedding = self.bond_encoder(edge_attr)
+            edge_embedding = self.edge_encoder(edge_attr)
         else:
             edge_embedding = None
 
