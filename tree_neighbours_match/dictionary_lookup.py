@@ -3,8 +3,7 @@ import itertools
 import random
 import math
 
-from tree_dataset import TreeDataset
-import common
+from tree_neighbours_match.tree_dataset import TreeDataset
 
 
 class DictionaryLookupDataset(TreeDataset):

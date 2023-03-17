@@ -1,6 +1,6 @@
 from enum import Enum, auto
 
-from dictionary_lookup import DictionaryLookupDataset
+from tree_neighbours_match.dictionary_lookup import DictionaryLookupDataset
 
 from torch import nn
 from torch_geometric.nn import GCNConv, GatedGraphConv, GINConv, GATConv

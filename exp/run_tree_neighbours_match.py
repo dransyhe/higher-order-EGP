@@ -1,19 +1,16 @@
-import time
-
 import torch
-from torch_geometric.data import DataLoader
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-
+import time
 import numpy as np
 import random
+from torch_geometric.data import DataLoader
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from argparse import ArgumentParser
 from attrdict import AttrDict
-
-from common import STOP
-# from models.graph_model import GraphModel
 from models.gnn import GNN
+from tree_neighbours_match.common import Task, GNN_TYPE, STOP
 
 
-class Experiment():
+class Experiment:
     def __init__(self, args):
         self.task = args.task
         self.gnn = args.gnn
@@ -42,23 +39,18 @@ class Experiment():
         self.X_train, self.X_test, dim0, out_dim, self.criterion = \
             self.task.get_dataset(self.depth, self.train_fraction)
 
-        # self.model = GraphModel(gnn_type=gnn_type, num_layers=self.num_layers, dim0=dim0, h_dim=self.dim, out_dim=out_dim,
-        #                         last_layer_fully_adjacent=args.last_layer_fully_adjacent, unroll=args.unroll,
-        #                         layer_norm=not args.no_layer_norm,
-        #                         use_activation=not args.no_activation,
-        #                         use_residual=not args.no_residual
-        #                         ).to(self.device)
-
         if self.gnn == 'gin':
             self.model = GNN(gnn_type='gin', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
-                        emb_dim=self.emb_dim,
-                        drop_ratio=self.drop_ratio, expander=False,
-                        expander_edge_handling=None, tree_neighbours_dim0=dim0, tree_neighbours_out_dim=out_dim).to(device)
+                             emb_dim=self.emb_dim,
+                             drop_ratio=self.drop_ratio, expander=False,
+                             expander_edge_handling=None, tree_neighbours_dim0=dim0,
+                             tree_neighbours_out_dim=out_dim).to(device)
         elif self.gnn == 'gcn':
             self.model = GNN(gnn_type='gcn', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
-                        emb_dim=self.emb_dim,
-                        drop_ratio=self.drop_ratio, expander=False,
-                        expander_edge_handling=None, tree_neighbours_dim0=dim0, tree_neighbours_out_dim=out_dim).to(device)
+                             emb_dim=self.emb_dim,
+                             drop_ratio=self.drop_ratio, expander=False,
+                             expander_edge_handling=None, tree_neighbours_dim0=dim0,
+                             tree_neighbours_out_dim=out_dim).to(device)
         else:
             raise ValueError('Invalid GNN type')
 
@@ -181,3 +173,41 @@ class Experiment():
                 total_examples += batch.y.size(0)
             acc = total_correct / total_examples
             return acc
+
+
+def main():
+    parser = ArgumentParser()
+    parser.add_argument("--task", dest="task", default=Task.NEIGHBORS_MATCH, type=Task.from_string, choices=list(Task),
+                        required=False)
+    parser.add_argument("--gnn", dest="gnn", default="gin", type=str,
+                        help='GNN gin, gin-virtual, or gcn, or gcn-virtual (default: gin-virtual)')
+    parser.add_argument("--emb_dim", dest="emb_dim", default=32, type=int,
+                        required=False)  # TODO: This is lower than OGB
+    parser.add_argument("--depth", dest="depth", default=5, type=int, required=False)
+    parser.add_argument("--num_layers", dest="num_layers", default=6, type=int,
+                        required=False)  # TODO: Use (depth+1) in original paper
+    parser.add_argument('--drop_ratio', type=float, default=0.5,
+                        help='dropout ratio (default: 0.5)')
+    parser.add_argument("--train_fraction", dest="train_fraction", default=0.8, type=float, required=False)
+    parser.add_argument("--max_epochs", dest="max_epochs", default=50000, type=int, required=False)
+    parser.add_argument("--eval_every", dest="eval_every", default=100, type=int, required=False)
+    parser.add_argument("--batch_size", dest="batch_size", default=1024, type=int, required=False)
+    parser.add_argument("--accum_grad", dest="accum_grad", default=1, type=int, required=False)
+    parser.add_argument("--stop", dest="stop", default=STOP.TRAIN, type=STOP.from_string, choices=list(STOP),
+                        required=False)
+    parser.add_argument("--patience", dest="patience", default=20, type=int, required=False)
+    parser.add_argument("--loader_workers", dest="loader_workers", default=0, type=int, required=False)
+    parser.add_argument('--last_layer_fully_adjacent', action='store_true')
+    parser.add_argument('--no_layer_norm', action='store_true')
+    parser.add_argument('--no_activation', action='store_true')
+    parser.add_argument('--no_residual', action='store_true')
+    # parser.add_argument('--unroll', action='store_true', help='use the same weights across GNN layers')
+    parser.add_argument('--filename', type=str, default="tree_neighbours_match_no_expander",
+                        help='filename to output result (default: )')
+    args = parser.parse_args()
+
+    Experiment(args).run()
+
+
+if __name__ == "__main__":
+    main()
