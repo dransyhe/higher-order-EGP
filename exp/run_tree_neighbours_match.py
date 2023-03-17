@@ -34,8 +34,6 @@ class Experiment:
         np.random.seed(seed)
         random.seed(seed)
 
-        device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-
         self.X_train, self.X_test, dim0, out_dim, self.criterion = \
             self.task.get_dataset(self.depth, self.train_fraction)
 
