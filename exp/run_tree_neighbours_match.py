@@ -42,13 +42,13 @@ class Experiment:
                              emb_dim=self.emb_dim,
                              drop_ratio=self.drop_ratio, expander=False,
                              expander_edge_handling=None, tree_neighbours_dim0=dim0,
-                             tree_neighbours_out_dim=out_dim).to(self.device)
+                             tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
         elif self.gnn == 'gcn':
             self.model = GNN(gnn_type='gcn', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
                              emb_dim=self.emb_dim,
                              drop_ratio=self.drop_ratio, expander=False,
                              expander_edge_handling=None, tree_neighbours_dim0=dim0,
-                             tree_neighbours_out_dim=out_dim).to(self.device)
+                             tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
         else:
             raise ValueError('Invalid GNN type')
 
