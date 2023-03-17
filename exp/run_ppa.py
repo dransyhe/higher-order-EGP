@@ -15,7 +15,7 @@ import numpy as np
 from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
 ### importing utils
-from models.utils import str2bool
+from models.utils import str2bool, set_seed
 
 multicls_criterion = torch.nn.CrossEntropyLoss()
 
@@ -71,6 +71,8 @@ def add_zeros(data):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='GNN baselines on ogbg-ppa data with Pytorch Geometrics')
+    parser.add_argument('--seed', type=int, default=1,
+                        help='random seed for training')
     parser.add_argument('--device', type=int, default=0,
                         help='which gpu to use if any (default: 0)')
     parser.add_argument('--gnn', type=str, default='gin-virtual',
@@ -97,8 +99,8 @@ def main():
                         help='method for generating expander graph')
     parser.add_argument('--expander_graph_order', type=int, default=3,
                         help='order of hypergraph expander graph')
-    parser.add_argument('--random_seed', type=int, default=42,
-                        help='random seed used when generating ramanujan bipartite graphs')
+    # parser.add_argument('--random_seed', type=int, default=42,
+    #                     help='random seed used when generating ramanujan bipartite graphs')
     parser.add_argument('--expander_edge_handling', type=str, default='masking',
                         choices=['masking', 'learn-features', 'summation', 'summation-mlp'],
                         help='method to handle expander edge nodes')
@@ -107,6 +109,8 @@ def main():
     args = parser.parse_args()
 
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+
+    set_seed(args.seed)
 
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
@@ -118,7 +122,6 @@ def main():
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
             args.expander_graph_order,
-            args.random_seed,
             True)
 
     ### automatic dataloading and splitting

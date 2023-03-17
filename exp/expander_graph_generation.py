@@ -59,7 +59,7 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
 
 
 def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
-                                                     random_seed: int,
+                                                     # random_seed: int,
                                                      ppa: bool,
                                                      data: Data):
     """
@@ -90,9 +90,9 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
 
     connected = False
     ramanujan = False
-    random_seed_offset = 0
+    # random_seed_offset = 0
     while (not connected) and (not ramanujan):
-        random.seed(random_seed + random_seed_offset)
+        # random.seed(random_seed + random_seed_offset)
         all_destination_nodes = []
         for i in range(hypergraph_order):
             valid_shuffle = False
@@ -129,7 +129,7 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
         adj_eigenvalues = np.sort(np.linalg.eigvals(adj_matrix.toarray()))
         second_largest_eigenvalue = max(abs(adj_eigenvalues[1]), adj_eigenvalues[-2])
         ramanujan = second_largest_eigenvalue <= 2 * math.sqrt(hypergraph_order - 1)
-        random_seed_offset += 1
+        # random_seed_offset += 1
 
     ones = torch.ones(num_nodes)
     zeros = torch.zeros(num_nodes)

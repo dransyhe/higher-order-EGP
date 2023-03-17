@@ -1,6 +1,7 @@
 #!/bin/sh
 
 python -m exp.run_mol \
+    --seed=1 \
     --device=0 \
     --gnn=gin \
     --drop_ratio=0.5 \
