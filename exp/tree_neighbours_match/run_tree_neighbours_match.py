@@ -12,7 +12,7 @@ if __name__ == '__main__':
                         help='GNN gin, gin-virtual, or gcn, or gcn-virtual (default: gin-virtual)')
     parser.add_argument("--emb_dim", dest="emb_dim", default=32, type=int, required=False)  # TODO: This is lower than OGB
     parser.add_argument("--depth", dest="depth", default=5, type=int, required=False)
-    parser.add_argument("--num_layers", dest="num_layers", default=None, type=int, required=False) # TODO: Use (depth+1) in original paper
+    parser.add_argument("--num_layers", dest="num_layers", default=6, type=int, required=False) # TODO: Use (depth+1) in original paper
     parser.add_argument('--drop_ratio', type=float, default=0.5,
                         help='dropout ratio (default: 0.5)')
     parser.add_argument("--train_fraction", dest="train_fraction", default=0.8, type=float, required=False)
@@ -28,7 +28,8 @@ if __name__ == '__main__':
     parser.add_argument('--no_layer_norm', action='store_true')
     parser.add_argument('--no_activation', action='store_true')
     parser.add_argument('--no_residual', action='store_true')
-    parser.add_argument('--unroll', action='store_true', help='use the same weights across GNN layers')
+    # parser.add_argument('--unroll', action='store_true', help='use the same weights across GNN layers')
+    parser.add_argument('--filename', type=str, default="tree_neighbours_match_no_expander", help='filename to output result (default: )')
 
     args = parser.parse_args()
     Experiment(args).run()

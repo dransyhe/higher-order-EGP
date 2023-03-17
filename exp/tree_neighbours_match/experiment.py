@@ -1,3 +1,5 @@
+import time
+
 import torch
 from torch_geometric.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -28,6 +30,7 @@ class Experiment():
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.stopping_criterion = args.stop
         self.patience = args.patience
+        self.filename = args.filename
 
         seed = 11
         torch.manual_seed(seed)
@@ -81,6 +84,8 @@ class Experiment():
         best_train_acc = 0.0
         best_epoch = 0
         epochs_no_improve = 0
+        train_accs = []
+        test_accs = []
         for epoch in range(1, (self.max_epochs // self.eval_every) + 1):
             self.model.train()
             loader = DataLoader(self.X_train * self.eval_every, batch_size=self.batch_size, shuffle=True,
@@ -112,11 +117,18 @@ class Experiment():
             test_acc = self.eval()
             cur_lr = [g["lr"] for g in optimizer.param_groups]
 
+            train_accs.append(train_acc)
+            test_accs.append(test_acc)
+
             new_best_str = ''
             stopping_threshold = 0.0001
             stopping_value = 0
             if self.stopping_criterion is STOP.TEST:
                 if test_acc > best_test_acc + stopping_threshold:
+                    # TODO: Remove timing once verified it doesn't take too long
+                    start = time.time()
+                    torch.save(self.model.state_dict(), self.filename + "_final_model.pt")
+                    print(f"Time Taken to Save Model: {time.time() - start}")
                     best_test_acc = test_acc
                     best_train_acc = train_acc
                     best_epoch = epoch
@@ -127,6 +139,10 @@ class Experiment():
                     epochs_no_improve += 1
             elif self.stopping_criterion is STOP.TRAIN:
                 if train_acc > best_train_acc + stopping_threshold:
+                    # TODO: Remove timing once verified it doesn't take too long
+                    start = time.time()
+                    torch.save(self.model.state_dict(), self.filename + "_final_model.pt")
+                    print(f"Time Taken to Save Model: {time.time() - start}")
                     best_train_acc = train_acc
                     best_test_acc = test_acc
                     best_epoch = epoch
@@ -144,6 +160,9 @@ class Experiment():
                     f'{self.patience} * {self.eval_every} epochs without {self.stopping_criterion} improvement, stopping. ')
                 break
         print(f'Best train acc: {best_train_acc}, epoch: {best_epoch * self.eval_every}')
+
+        torch.save({'Train': best_train_acc, 'Test': best_test_acc, 'Epoch': best_epoch}, self.filename + "_best")
+        torch.save({'Train': train_accs, 'Test': test_accs}, self.filename + "_curves")
 
         return best_train_acc, best_test_acc, best_epoch
 
