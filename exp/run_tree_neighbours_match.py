@@ -17,7 +17,6 @@ class Experiment:
         self.depth = args.depth
         self.num_layers = self.depth if args.num_layers is None else args.num_layers
         self.emb_dim = args.emb_dim
-        self.drop_ratio = args.drop_ratio
         self.train_fraction = args.train_fraction
         self.max_epochs = args.max_epochs
         self.batch_size = args.batch_size
@@ -144,6 +143,8 @@ class Experiment:
                     epochs_no_improve += 1
             print(
                 f'Epoch {epoch * self.eval_every}, LR: {cur_lr}: Train loss: {avg_training_loss:.7f}, Train acc: {train_acc:.4f}, Test accuracy: {test_acc:.4f}{new_best_str}')
+            torch.save({'Train': best_train_acc, 'Test': best_test_acc, 'Epoch': best_epoch}, self.filename + "_best")
+            torch.save({'Train': train_accs, 'Test': test_accs}, self.filename + "_curves")
             if stopping_value == 1.0:
                 break
             if epochs_no_improve >= self.patience:
@@ -184,9 +185,7 @@ def main():
                         required=False)  # TODO: This is lower than OGB
     parser.add_argument("--depth", dest="depth", default=5, type=int, required=False)
     parser.add_argument("--num_layers", dest="num_layers", default=3, type=int,
-                        required=False)  # TODO: Use (depth+1) in original paper
-    parser.add_argument('--drop_ratio', type=float, default=0.5,
-                        help='dropout ratio (default: 0.5)')
+                        required=False)  # Use (depth+1) in original paper
     parser.add_argument("--train_fraction", dest="train_fraction", default=0.8, type=float, required=False)
     parser.add_argument("--max_epochs", dest="max_epochs", default=50000, type=int, required=False)
     parser.add_argument("--eval_every", dest="eval_every", default=100, type=int, required=False)
@@ -196,12 +195,7 @@ def main():
                         required=False)
     parser.add_argument("--patience", dest="patience", default=20, type=int, required=False)
     parser.add_argument("--loader_workers", dest="loader_workers", default=0, type=int, required=False)
-    parser.add_argument('--last_layer_fully_adjacent', action='store_true')
-    parser.add_argument('--no_layer_norm', action='store_true')
-    parser.add_argument('--no_activation', action='store_true')
-    parser.add_argument('--no_residual', action='store_true')
-    # parser.add_argument('--unroll', action='store_true', help='use the same weights across GNN layers')
-    parser.add_argument('--filename', type=str, default="tree_neighbours_match_no_expander",
+    parser.add_argument('--filename', type=str, default="tree_neighbours_match_expander_learn_features",
                         help='filename to output result (default: )')
     parser.add_argument('--expander', dest='expander', type=str2bool, default=True,
                         help='whether to use expander graph propagation')
