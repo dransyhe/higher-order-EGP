@@ -2,6 +2,8 @@ import functools
 import argparse
 import numpy as np
 import time
+import os
+import logging
 import random
 import torch
 import torch.optim as optim
@@ -105,14 +107,33 @@ def main():
                         help='method to handle expander edge nodes')
     parser.add_argument('--feature', type=str, default="full",
                         help='full feature or simple feature')
-    parser.add_argument('--filename', type=str, default="",
-                        help='filename to output result (default: )')
+    # parser.add_argument('--save_dir', type=str, default="",
+    #                     help='save_dir to output result (default: )')
     args = parser.parse_args()
 
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
     # Set the seed for everything
     set_seed(args.seed)
+
+    # Set path
+    path = os.path.join(os.getcwd() + f"/logs/{args.dataset}/")
+    if not os.path.exists(path):
+        os.makedirs(path)
+    save_dir = os.path.join(path, f"{args.expander_graph_generation_method}_seed{args.seed}_")
+    logging.basicConfig(level=logging.INFO,
+                        handlers=[
+                            logging.FileHandler(save_dir + "log.txt"),
+                            logging.StreamHandler()
+                        ])
+    logging.info(args)
+    logging.info(f'Using: {args.device}')
+    logging.info(f"Using seed {args.seed}")
+    logging.info(f"Dataset: {args.dataset}")
+    logging.info(f"Expander generation method: {args.expander_graph_generation_method}")
+    logging.info(f"Expander graph order: {args.expander_graph_order}")
+    logging.info(f"Expander edge handling: {args.expander_edge_handling}")
+
 
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
@@ -134,7 +155,7 @@ def main():
     if args.feature == 'full':
         pass
     elif args.feature == 'simple':
-        print('using simple feature')
+        logging.info('using simple feature')
         # only retain the top two node/edge features
         dataset.data.x = dataset.data.x[:, :2]
         dataset.data.edge_attr = dataset.data.edge_attr[:, :2]
@@ -168,25 +189,26 @@ def main():
 
     best_val_so_far = 0
     for epoch in range(1, args.epochs + 1):
-        print("=====Epoch {}".format(epoch))
-        print('Training...')
+        logging.info("=====Epoch {}".format(epoch))
+        logging.info('Training...')
         train(model, device, train_loader, optimizer, dataset.task_type)
 
-        print('Evaluating...')
+        logging.info('Evaluating...')
         train_perf = eval(model, device, train_loader, evaluator)
         valid_perf = eval(model, device, valid_loader, evaluator)
         test_perf = eval(model, device, test_loader, evaluator)
 
-        print({'Train': train_perf, 'Validation': valid_perf, 'Test': test_perf})
+        logging.info({'Train': train_perf, 'Validation': valid_perf, 'Test': test_perf})
 
         train_curve.append(train_perf[dataset.eval_metric])
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
-        if 'classification' in dataset.task_type and valid_perf > best_val_so_far:
+        if 'classification' in dataset.task_type and valid_perf[dataset.eval_metric] > best_val_so_far:
             # TODO: Check how long saving the model takes (shouldn't be too long) so we don't slow the training process
             start_time = time.time()
-            torch.save(model.state_dict(), args.filename + "best_val_model.pt")
-            print(f"Time taken to save model: {time.time() - start_time}")
+            torch.save(model.state_dict(), save_dir + "best_val_model.pt")
+            best_val_so_far = valid_perf[dataset.eval_metric]
+            logging.info(f"Time taken to save model: {time.time() - start_time}")
 
     if 'classification' in dataset.task_type:
         best_val_epoch = np.argmax(np.array(valid_curve))
@@ -195,15 +217,15 @@ def main():
         best_val_epoch = np.argmin(np.array(valid_curve))
         best_train = min(train_curve)
 
-    print('Finished training!')
-    print('Best validation score: {}'.format(valid_curve[best_val_epoch]))
-    print('Test score: {}'.format(test_curve[best_val_epoch]))
+    logging.info('Finished training!')
+    logging.info('Best validation score: {}'.format(valid_curve[best_val_epoch]))
+    logging.info('Test score: {}'.format(test_curve[best_val_epoch]))
 
-    if not args.filename == '':
+    if not save_dir == '':
         torch.save({'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
-                    'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, args.filename + "_best")
-        torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, args.filename + "_curves")
-        torch.save(model.state_dict(), args.filename + "final_model.pt")
+                    'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, save_dir + "_best")
+        torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, save_dir + "_curves")
+        torch.save(model.state_dict(), save_dir + "final_model.pt")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import functools
+import logging
 import torch
 from torch_geometric.loader import DataLoader
 import torch.optim as optim
@@ -49,7 +50,7 @@ def train(model, device, loader, optimizer):
 
             loss_accum += loss.item()
 
-    print('Average training loss: {}'.format(loss_accum / (step + 1)))
+    logging.info('Average training loss: {}'.format(loss_accum / (step + 1)))
 
 
 def eval(model, device, loader, evaluator, arr_to_seq):
@@ -128,10 +129,10 @@ def main():
     parser.add_argument('--expander_edge_handling', type=str, default='masking',
                         choices=['masking', 'learn-features', 'summation', 'summation-mlp'],
                         help='method to handle expander edge nodes')
-    parser.add_argument('--filename', type=str, default="",
-                        help='filename to output result (default: )')
+    # parser.add_argument('--save_dir', type=str, default="",
+    #                      help='save_dir to output result (default: )')
     args = parser.parse_args()
-    print(args)
+    logging.info(args)
 
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
@@ -146,7 +147,26 @@ def main():
 
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
+    # Set the seed for everything
     set_seed(args.seed)
+
+    # Set path
+    path = os.path.join(os.getcwd() + f"/logs/{args.dataset}/")
+    if not os.path.exists(path):
+        os.makedirs(path)
+    save_dir = os.path.join(path, f"{args.expander_graph_generation_method}_seed{args.seed}_")
+    logging.basicConfig(level=logging.INFO,
+                        handlers=[
+                            logging.FileHandler(save_dir + "log.txt"),
+                            logging.StreamHandler()
+                        ])
+    logging.info(args)
+    logging.info(f'Using: {args.device}')
+    logging.info(f"Using seed {args.seed}")
+    logging.info(f"Dataset: {args.dataset}")
+    logging.info(f"Expander generation method: {args.expander_graph_generation_method}")
+    logging.info(f"Expander graph order: {args.expander_graph_order}")
+    logging.info(f"Expander edge handling: {args.expander_edge_handling}")
 
     ### automatic dataloading and splitting
     if not args.expander:
@@ -155,14 +175,14 @@ def main():
         dataset = PygGraphPropPredDataset(name=args.dataset, pre_transform=expander_graph_generation_fn)
 
     seq_len_list = np.array([len(seq) for seq in dataset.data.y])
-    print('Target seqence less or equal to {} is {}%.'.format(args.max_seq_len,
+    logging.info('Target seqence less or equal to {} is {}%.'.format(args.max_seq_len,
                                                               np.sum(seq_len_list <= args.max_seq_len) / len(
                                                                   seq_len_list)))
 
     split_idx = dataset.get_idx_split()
 
     if args.random_split:
-        print('Using random split')
+        logging.info('Using random split')
         perm = torch.randperm(len(dataset))
         num_train, num_valid, num_test = len(split_idx['train']), len(split_idx['valid']), len(split_idx['test'])
         split_idx['train'] = perm[:num_train]
@@ -173,37 +193,37 @@ def main():
         assert (len(split_idx['valid']) == num_valid)
         assert (len(split_idx['test']) == num_test)
 
-    # print(split_idx['train'])
-    # print(split_idx['valid'])
-    # print(split_idx['test'])
+    # logging.info(split_idx['train'])
+    # logging.info(split_idx['valid'])
+    # logging.info(split_idx['test'])
 
     # train_method_name = [' '.join(dataset.data.y[i]) for i in split_idx['train']]
     # valid_method_name = [' '.join(dataset.data.y[i]) for i in split_idx['valid']]
     # test_method_name = [' '.join(dataset.data.y[i]) for i in split_idx['test']]
-    # print('#train')
-    # print(len(train_method_name))
-    # print('#valid')
-    # print(len(valid_method_name))
-    # print('#test')
-    # print(len(test_method_name))
+    # logging.info('#train')
+    # logging.info(len(train_method_name))
+    # logging.info('#valid')
+    # logging.info(len(valid_method_name))
+    # logging.info('#test')
+    # logging.info(len(test_method_name))
 
     # train_method_name_set = set(train_method_name)
     # valid_method_name_set = set(valid_method_name)
     # test_method_name_set = set(test_method_name)
 
     # # unique method name
-    # print('#unique train')
-    # print(len(train_method_name_set))
-    # print('#unique valid')
-    # print(len(valid_method_name_set))
-    # print('#unique test')
-    # print(len(test_method_name_set))
+    # logging.info('#unique train')
+    # logging.info(len(train_method_name_set))
+    # logging.info('#unique valid')
+    # logging.info(len(valid_method_name_set))
+    # logging.info('#unique test')
+    # logging.info(len(test_method_name_set))
 
     # # unique valid/test method name
-    # print('#valid unseen during training')
-    # print(len(valid_method_name_set - train_method_name_set))
-    # print('#test unseen during training')
-    # print(len(test_method_name_set - train_method_name_set))
+    # logging.info('#valid unseen during training')
+    # logging.info(len(valid_method_name_set - train_method_name_set))
+    # logging.info('#test unseen during training')
+    # logging.info(len(test_method_name_set - train_method_name_set))
 
     ### building vocabulary for sequence predition. Only use training data.
 
@@ -212,21 +232,21 @@ def main():
     # test encoder and decoder
     # for data in dataset:
     #     # PyG >= 1.5.0
-    #     print(data.y)
+    #     logging.info(data.y)
     #
     #     # PyG 1.4.3
-    #     # print(data.y[0])
+    #     # logging.info(data.y[0])
     #     data = encode_y_to_arr(data, vocab2idx, args.max_seq_len)
-    #     print(data.y_arr[0])
+    #     logging.info(data.y_arr[0])
     #     decoded_seq = decode_arr_to_seq(data.y_arr[0], idx2vocab)
-    #     print(decoded_seq)
-    #     print('')
+    #     logging.info(decoded_seq)
+    #     logging.info('')
 
     ## test augment_edge
     # data = dataset[2]
-    # print(data)
+    # logging.info(data)
     # data_augmented = augment_edge(data)
-    # print(data_augmented)
+    # logging.info(data_augmented)
 
     ### set the transform function
     # augment_edge: add next-token edge as well as inverse edges. add edge attributes.
@@ -247,7 +267,7 @@ def main():
     nodetypes_mapping = pd.read_csv(os.path.join(dataset.root, 'mapping', 'typeidx2type.csv.gz'))
     nodeattributes_mapping = pd.read_csv(os.path.join(dataset.root, 'mapping', 'attridx2attr.csv.gz'))
 
-    print(nodeattributes_mapping)
+    logging.info(nodeattributes_mapping)
 
     ### Encoding node features into emb_dim vectors.
     ### The following three node features are used.
@@ -270,18 +290,18 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    print(f'#Params: {sum(p.numel() for p in model.parameters())}')
+    logging.info(f'#Params: {sum(p.numel() for p in model.parameters())}')
 
     valid_curve = []
     test_curve = []
     train_curve = []
 
     for epoch in range(1, args.epochs + 1):
-        print("=====Epoch {}".format(epoch))
-        print('Training...')
+        logging.info("=====Epoch {}".format(epoch))
+        logging.info('Training...')
         train(model, device, train_loader, optimizer)
 
-        print('Evaluating...')
+        logging.info('Evaluating...')
         train_perf = eval(model, device, train_loader, evaluator,
                           arr_to_seq=lambda arr: decode_arr_to_seq(arr, idx2vocab))
         valid_perf = eval(model, device, valid_loader, evaluator,
@@ -289,23 +309,23 @@ def main():
         test_perf = eval(model, device, test_loader, evaluator,
                          arr_to_seq=lambda arr: decode_arr_to_seq(arr, idx2vocab))
 
-        print({'Train': train_perf, 'Validation': valid_perf, 'Test': test_perf})
+        logging.info({'Train': train_perf, 'Validation': valid_perf, 'Test': test_perf})
 
         train_curve.append(train_perf[dataset.eval_metric])
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
 
-    print('F1')
+    logging.info('F1')
     best_val_epoch = np.argmax(np.array(valid_curve))
     best_train = max(train_curve)
-    print('Finished training!')
-    print('Best validation score: {}'.format(valid_curve[best_val_epoch]))
-    print('Test score: {}'.format(test_curve[best_val_epoch]))
+    logging.info('Finished training!')
+    logging.info('Best validation score: {}'.format(valid_curve[best_val_epoch]))
+    logging.info('Test score: {}'.format(test_curve[best_val_epoch]))
 
-    if not args.filename == '':
+    if not save_dir == '':
         result_dict = {'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
                        'Train': train_curve[best_val_epoch], 'BestTrain': best_train}
-        torch.save(result_dict, args.filename)
+        torch.save(result_dict, save_dir)
 
 
 if __name__ == "__main__":
