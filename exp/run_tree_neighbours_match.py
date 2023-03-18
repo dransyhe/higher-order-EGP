@@ -1,5 +1,4 @@
 import torch
-import time
 import numpy as np
 import random
 from torch_geometric.data import DataLoader
@@ -8,6 +7,7 @@ from argparse import ArgumentParser
 from attrdict import AttrDict
 from models.gnn import GNN, TreeNeighboursGNN
 from tree_neighbours_match.common import Task, GNN_TYPE, STOP
+from models.utils import str2bool
 
 
 class Experiment:
@@ -28,32 +28,34 @@ class Experiment:
         self.stopping_criterion = args.stop
         self.patience = args.patience
         self.filename = args.filename
+        self.expander = args.expander
+        self.hypergraph_order = args.hypergraph_order
+        self.random_seed = args.random_seed
+        self.expander_edge_handling = args.expander_edge_handling
 
-        seed = 11
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        random.seed(seed)
+        torch.manual_seed(self.random_seed)
+        np.random.seed(self.random_seed)
+        random.seed(self.random_seed)
 
         self.X_train, self.X_test, dim0, out_dim, self.criterion = \
-            self.task.get_dataset(self.depth, self.train_fraction)
-
-        if self.gnn == 'gin':
-            self.model = TreeNeighboursGNN(gnn_type='gin', num_layers=self.num_layers, dim0=dim0, h_dim=self.emb_dim,
-                                           out_dim=out_dim, layer_norm=not args.no_layer_norm, use_activation=not args.no_activation,
-                                           use_residual=not args.no_residual).to(self.device)
+            self.task.get_dataset(self.depth, self.train_fraction, expander=self.expander,
+                                  hypergraph_order=self.hypergraph_order, random_seed=self.random_seed)
 
         # if self.gnn == 'gin':
-        #     self.model = GNN(gnn_type='gin', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
-        #                      emb_dim=self.emb_dim,
-        #                      drop_ratio=self.drop_ratio, expander=False,
-        #                      expander_edge_handling=None, tree_neighbours_dim0=dim0,
-        #                      tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
-        # elif self.gnn == 'gcn':
-        #     self.model = GNN(gnn_type='gcn', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
-        #                      emb_dim=self.emb_dim,
-        #                      drop_ratio=self.drop_ratio, expander=False,
-        #                      expander_edge_handling=None, tree_neighbours_dim0=dim0,
-        #                      tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
+        #     self.model = TreeNeighboursGNN(gnn_type='gin', num_layers=self.num_layers, dim0=dim0, h_dim=self.emb_dim,
+        #                                    out_dim=out_dim, layer_norm=not args.no_layer_norm, use_activation=not args.no_activation,
+        #                                    use_residual=not args.no_residual).to(self.device)
+
+        if self.gnn == 'gin':
+            self.model = GNN(gnn_type='gin', task="tree_neighbours_match", num_layer=self.num_layers,
+                             emb_dim=self.emb_dim, expander=self.expander,
+                             expander_edge_handling=self.expander_edge_handling, tree_neighbours_dim0=dim0,
+                             tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
+        elif self.gnn == 'gcn':
+            self.model = GNN(gnn_type='gcn', task="tree_neighbours_match", num_layer=self.num_layers,
+                             emb_dim=self.emb_dim, expander=self.expander,
+                             expander_edge_handling=self.expander_edge_handling, tree_neighbours_dim0=dim0,
+                             tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
         else:
             raise ValueError('Invalid GNN type')
 
@@ -120,10 +122,7 @@ class Experiment:
             stopping_value = 0
             if self.stopping_criterion is STOP.TEST:
                 if test_acc > best_test_acc + stopping_threshold:
-                    # TODO: Remove timing once verified it doesn't take too long
-                    start = time.time()
                     torch.save(self.model.state_dict(), self.filename + "_final_model.pt")
-                    print(f"Time Taken to Save Model: {time.time() - start}")
                     best_test_acc = test_acc
                     best_train_acc = train_acc
                     best_epoch = epoch
@@ -134,10 +133,7 @@ class Experiment:
                     epochs_no_improve += 1
             elif self.stopping_criterion is STOP.TRAIN:
                 if train_acc > best_train_acc + stopping_threshold:
-                    # TODO: Remove timing once verified it doesn't take too long
-                    start = time.time()
                     torch.save(self.model.state_dict(), self.filename + "_final_model.pt")
-                    print(f"Time Taken to Save Model: {time.time() - start}")
                     best_train_acc = train_acc
                     best_test_acc = test_acc
                     best_epoch = epoch
@@ -187,7 +183,7 @@ def main():
     parser.add_argument("--emb_dim", dest="emb_dim", default=32, type=int,
                         required=False)  # TODO: This is lower than OGB
     parser.add_argument("--depth", dest="depth", default=5, type=int, required=False)
-    parser.add_argument("--num_layers", dest="num_layers", default=6, type=int,
+    parser.add_argument("--num_layers", dest="num_layers", default=3, type=int,
                         required=False)  # TODO: Use (depth+1) in original paper
     parser.add_argument('--drop_ratio', type=float, default=0.5,
                         help='dropout ratio (default: 0.5)')
@@ -207,6 +203,15 @@ def main():
     # parser.add_argument('--unroll', action='store_true', help='use the same weights across GNN layers')
     parser.add_argument('--filename', type=str, default="tree_neighbours_match_no_expander",
                         help='filename to output result (default: )')
+    parser.add_argument('--expander', dest='expander', type=str2bool, default=True,
+                        help='whether to use expander graph propagation')
+    parser.add_argument('--hypergraph_order', type=int, default=3,
+                        help='order of hypergraph expander graph')
+    parser.add_argument('--random_seed', type=int, default=42,
+                        help='random seed used when generating ramanujan bipartite graphs')
+    parser.add_argument('--expander_edge_handling', type=str, default='learn-features',
+                        choices=['masking', 'learn-features', 'summation', 'summation-mlp'],
+                        help='method to handle expander edge nodes')
     args = parser.parse_args()
 
     Experiment(args).run()

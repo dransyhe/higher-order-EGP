@@ -58,9 +58,9 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
     return new_data
 
 
+# NOTE - Below has been adapted to only work on tree_neighbours_match dataset
 def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
                                                      random_seed: int,
-                                                     ppa: bool,
                                                      data: Data):
     """
      Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
@@ -79,14 +79,12 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
      :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
      :return: updated graph with additional attributes for expander graph
      """
-    if ppa:
-        # ppa dataset requires manual addition of node features
-        data.x = torch.zeros(data.num_nodes, dtype=torch.long)
     new_data = data
     num_nodes = data.x.shape[0]
     expander_graph_edge_nodes = torch.zeros(data.x.shape, dtype=data.x.dtype)
     expander_graph_x = torch.concat((data.x, expander_graph_edge_nodes))
     new_num_nodes = expander_graph_x.shape[0]
+    new_root_mask = torch.tensor([True] + [False] * (new_num_nodes - 1))
 
     connected = False
     ramanujan = False
@@ -138,4 +136,5 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
     new_data['expander_node_mask'] = expander_node_mask
     new_data['x'] = expander_graph_x
     new_data['num_nodes'] = new_num_nodes
+    new_data['root_mask'] = new_root_mask
     return new_data

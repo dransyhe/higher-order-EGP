@@ -5,6 +5,8 @@ from ogb.graphproppred.mol_encoder import AtomEncoder,BondEncoder
 
 
 ### GIN convolution along the graph structure
+# NOTE - This has been changed for consistency with 'run_tree_neighbours_match' task and shouldn't be run with
+# OGB
 class GINConv(MessagePassing):
     def __init__(self, emb_dim, task, flow=None):
         '''
@@ -16,10 +18,10 @@ class GINConv(MessagePassing):
         else:
             super(GINConv, self).__init__(aggr = "add", flow = flow)
 
-        self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, 2*emb_dim),
-                                       torch.nn.BatchNorm1d(2*emb_dim),
+        self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, emb_dim),
+                                       torch.nn.BatchNorm1d(emb_dim),
                                        torch.nn.ReLU(),
-                                       torch.nn.Linear(2*emb_dim, emb_dim))
+                                       torch.nn.Linear(emb_dim, emb_dim))
         self.eps = torch.nn.Parameter(torch.Tensor([0]))
         if task == "mol":
             self.edge_encoder = BondEncoder(emb_dim=emb_dim)

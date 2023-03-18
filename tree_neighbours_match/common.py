@@ -16,13 +16,13 @@ class Task(Enum):
         except KeyError:
             raise ValueError()
 
-    def get_dataset(self, depth, train_fraction):
+    def get_dataset(self, depth, train_fraction, expander=False, hypergraph_order=None, random_seed=None):
         if self is Task.NEIGHBORS_MATCH:
             dataset = DictionaryLookupDataset(depth)
         else:
             dataset = None
 
-        return dataset.generate_data(train_fraction)
+        return dataset.generate_data(train_fraction, expander, hypergraph_order, random_seed)
 
 
 class GNN_TYPE(Enum):

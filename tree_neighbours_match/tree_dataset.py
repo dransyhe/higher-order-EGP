@@ -1,3 +1,4 @@
+import exp.expander_graph_generation as expander_graph_generation
 import torch
 import torch_geometric
 
@@ -41,7 +42,7 @@ class TreeDataset(object):
             edge_index, _ = torch_geometric.utils.add_remaining_self_loops(edge_index=edge_index, )
         return edge_index
 
-    def generate_data(self, train_fraction):
+    def generate_data(self, train_fraction, expander=False, hypergraph_order=None, random_seed=None):
         data_list = []
 
         for comb in self.get_combinations():
@@ -49,7 +50,12 @@ class TreeDataset(object):
             nodes = torch.tensor(self.get_nodes_features(comb), dtype=torch.long)
             root_mask = torch.tensor([True] + [False] * (len(nodes) - 1))
             label = self.label(comb)
-            data_list.append(Data(x=nodes, edge_index=edge_index, root_mask=root_mask, y=label))
+            if expander:
+                original_data = Data(x=nodes, edge_index=edge_index, root_mask=root_mask, y=label)
+                expander_augmented_data = expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order, random_seed, original_data)
+                data_list.append(expander_augmented_data)
+            else:
+                data_list.append(Data(x=nodes, edge_index=edge_index, root_mask=root_mask, y=label))
 
         dim0, out_dim = self.get_dims()
         X_train, X_test = train_test_split(
