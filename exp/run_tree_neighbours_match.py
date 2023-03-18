@@ -6,7 +6,7 @@ from torch_geometric.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from argparse import ArgumentParser
 from attrdict import AttrDict
-from models.gnn import GNN
+from models.gnn import GNN, TreeNeighboursGNN
 from tree_neighbours_match.common import Task, GNN_TYPE, STOP
 
 
@@ -38,17 +38,22 @@ class Experiment:
             self.task.get_dataset(self.depth, self.train_fraction)
 
         if self.gnn == 'gin':
-            self.model = GNN(gnn_type='gin', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
-                             emb_dim=self.emb_dim,
-                             drop_ratio=self.drop_ratio, expander=False,
-                             expander_edge_handling=None, tree_neighbours_dim0=dim0,
-                             tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
-        elif self.gnn == 'gcn':
-            self.model = GNN(gnn_type='gcn', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
-                             emb_dim=self.emb_dim,
-                             drop_ratio=self.drop_ratio, expander=False,
-                             expander_edge_handling=None, tree_neighbours_dim0=dim0,
-                             tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
+            self.model = TreeNeighboursGNN(gnn_type='gin', num_layers=self.num_layers, dim0=dim0, h_dim=self.emb_dim,
+                                           out_dim=out_dim, layer_norm=not args.no_layer_norm, use_activation=not args.no_activation,
+                                           use_residual=not args.no_residual).to(self.device)
+
+        # if self.gnn == 'gin':
+        #     self.model = GNN(gnn_type='gin', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
+        #                      emb_dim=self.emb_dim,
+        #                      drop_ratio=self.drop_ratio, expander=False,
+        #                      expander_edge_handling=None, tree_neighbours_dim0=dim0,
+        #                      tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
+        # elif self.gnn == 'gcn':
+        #     self.model = GNN(gnn_type='gcn', task="tree_neighbours_match", num_class=0, num_layer=self.num_layers,
+        #                      emb_dim=self.emb_dim,
+        #                      drop_ratio=self.drop_ratio, expander=False,
+        #                      expander_edge_handling=None, tree_neighbours_dim0=dim0,
+        #                      tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
         else:
             raise ValueError('Invalid GNN type')
 
