@@ -122,6 +122,7 @@ def main():
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
             args.expander_graph_order,
+            args.seed,
             True)
 
     ### automatic dataloading and splitting
