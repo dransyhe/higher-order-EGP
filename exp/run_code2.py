@@ -161,7 +161,7 @@ def main():
                             logging.StreamHandler()
                         ])
     logging.info(args)
-    logging.info(f'Using: {args.device}')
+    logging.info(f'Using: {device}')
     logging.info(f"Using seed {args.seed}")
     logging.info(f"Dataset: {args.dataset}")
     logging.info(f"Expander generation method: {args.expander_graph_generation_method}")
