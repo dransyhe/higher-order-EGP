@@ -102,37 +102,56 @@ def add_expander_edges_via_perfect_matchings_shortest_paths_heuristics(hypergrap
                     if i != j and j != k and dis[i][k] + dis[k][j] < dis[i][j]:
                         dis[i][j] = dis[i][k] + dis[k][j]
 
-    source_nodes = torch.tensor([])
-    destination_nodes = torch.tensor([])
+    # The first perfect-matching is random
+    left_nodes = torch.tensor([i for i in range(num_nodes)])
     right_nodes = torch.tensor([num_nodes + i for i in range(num_nodes)])
-    nodes = [i for i in range(num_nodes)]
+    left_perm = torch.randperm(left_nodes.shape[0])
+    right_perm = torch.randperm(right_nodes.shape[0])
+    source_nodes = left_nodes[left_perm]
+    destination_nodes = right_nodes[right_perm]
+
+    # Compute sum_dist
     # sum_dist[right][left] stores the sum of shortest paths between left to all nodes connected to right
     sum_dist = torch.zeros((num_nodes, num_nodes))
+    for (left, right) in zip(left_perm, right_perm):
+        for k in range(num_nodes):
+            sum_dist[right][k] += dis[k][left]
 
-    for i in range(hypergraph_order):
-        # In each iteration, we builds a perfect-matching using heuristic stored in sum_dict
-        # We choose k-top maximum values of sum_dist[left][right]
-        # We also make sure these k-top have distinct (left, right) pair
+    # Generate the rest (hypergraph_order - 1) perfect-matchings using sum_dist as heuristics
+    nodes = [i for i in range(num_nodes)]
+    for i in range(hypergraph_order - 1):
+        # In each iteration, we builds a perfect-matching using heuristic stored in sum_dist
+        # We choose k-top maximum values of sum_dist[right][left]
+        # We also make sure these k-top have distinct (right, left) pair
         left_set = set(nodes)
         right_set = set(nodes)
+        # sum_dist stacked to one dimension for torch.sort
         _, sorted_edge_index = torch.sort(sum_dist.view(1, -1), descending=True)
         sorted_edge_index = sorted_edge_index.squeeze(0)
         j = 0
         left_nodes = []
+        right_nodes = []
         while len(left_set) > 0:
             index = sorted_edge_index[j].item()
+            # Recalculate index due to sum_dist stacked to one direction
             left = index % num_nodes
             right = int(index / num_nodes)
+            # Check if (left, right) are unique
             if left in left_set and right in right_set:
                 for k in range(num_nodes):
                     sum_dist[right][k] += dis[k][left]
                 left_set.remove(left)
                 right_set.remove(right)
                 left_nodes += [left]
+                right_nodes += [right]
             j += 1
         left_nodes = torch.Tensor(left_nodes)
+        right_nodes = torch.Tensor(right_nodes) + num_nodes
         source_nodes = torch.cat((source_nodes, left_nodes))
         destination_nodes = torch.cat((destination_nodes, right_nodes))
+
+    source_nodes = source_nodes.to(torch.long)
+    destination_nodes = destination_nodes.to(torch.long)
 
     expander_edge_index = torch.cat([source_nodes[None, ...], destination_nodes[None, ...]], dim=0)
     expander_edge_index = coalesce(expander_edge_index)  # Remove duplicate edges
