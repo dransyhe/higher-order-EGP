@@ -137,7 +137,11 @@ def main():
 
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
-        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings,
+        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings_heuristics,
+                                                         args.expander_graph_order,
+                                                         False)
+    elif args.expander_graph_generation_method == "perfect-matchings-shortest-path":
+        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings_shortest_paths_heuristics(),
                                                          args.expander_graph_order,
                                                          False)
     elif args.expander_graph_generation_method == "ramanujan-bipartite":

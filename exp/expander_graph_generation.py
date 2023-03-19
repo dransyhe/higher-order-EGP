@@ -4,7 +4,7 @@ import numpy as np
 import random
 import torch
 from torch_geometric.data import Data
-from torch_geometric.utils import coalesce, convert
+from torch_geometric.utils import coalesce, convert, to_dense_adj
 
 
 def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
@@ -43,6 +43,96 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
         right_perm = torch.randperm(right_nodes.shape[0])
         source_nodes = torch.concat((source_nodes, left_nodes[left_perm]))
         destination_nodes = torch.concat((destination_nodes, right_nodes[right_perm]))
+
+    expander_edge_index = torch.cat([source_nodes[None, ...], destination_nodes[None, ...]], dim=0)
+    expander_edge_index = coalesce(expander_edge_index)  # Remove duplicate edges
+    expander_edge_index = expander_edge_index.to(torch.int64)
+
+    ones = torch.ones(num_nodes)
+    zeros = torch.zeros(num_nodes)
+    expander_node_mask = torch.concat((ones, zeros))
+    new_data['expander_edge_index'] = expander_edge_index
+    new_data['expander_node_mask'] = expander_node_mask
+    new_data['x'] = expander_graph_x
+    new_data['num_nodes'] = new_num_nodes
+    return new_data
+
+
+def add_expander_edges_via_perfect_matchings_shortest_paths_heuristics(hypergraph_order: int,
+                                                                       ppa: bool,
+                                                                       data: Data):
+    """
+    Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
+    For each node in the original graph, we add a node in the bipartite graph. We then generate 'hypergraph_order'
+    perfect matchings of the resulting bipartite graph, and store these edges in the 'expander_edge_index' attribute
+    of the 'data'. The perfect matchings use a heuristic based on the sum of shortest paths between each pair of nodes
+    connected by each hyperedge.
+    We add the expander graph 'edge nodes' to the original graph nodes in 'data.x', and add an
+    'expander_node_mask' attribute, where expander_node_mask[i] == 1 if data.x[i] is a node belonging to the original
+    graph, and is 0 if data.x[i] is an 'edge node' belonging to the expander graph.
+
+    :param hypergraph_order: number of perfect matchings to generate. This is approximately the order of the resulting
+                             'hypergraph', though some 'edges' may be of a lower order as we don't enforce that the
+                             matchings are disjoint.
+    :param data: graph to be augmented
+    :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
+    :return: updated graph with additional attributes for expander graph
+    """
+    if ppa:
+        # ppa dataset requires manual addition of node features
+        data.x = torch.zeros(data.num_nodes, dtype=torch.long)
+    new_data = data
+    num_nodes = data.x.shape[0]
+    expander_graph_edge_nodes = torch.zeros(data.x.shape, dtype=data.x.dtype)
+    expander_graph_x = torch.concat((data.x, expander_graph_edge_nodes))
+    new_num_nodes = expander_graph_x.shape[0]
+
+    # Compute adjacency matrix
+    adj = to_dense_adj(data.edge_index, max_num_nodes=num_nodes)[0]
+    # Replace 0s with inf
+    dis = torch.where(adj == 0, float('inf'), adj)
+    # Replace diagonal values with 0
+    for i in range(num_nodes):
+        dis[i][i] = 0.
+    # Compute shortest-paths using Floyd–Warshall algorithm
+    for k in range(num_nodes):
+        for i in range(num_nodes):
+            if k != i:
+                for j in range(num_nodes):
+                    if i != j and j != k and dis[i][k] + dis[k][j] < dis[i][j]:
+                        dis[i][j] = dis[i][k] + dis[k][j]
+
+    source_nodes = torch.tensor([])
+    destination_nodes = torch.tensor([])
+    right_nodes = torch.tensor([num_nodes + i for i in range(num_nodes)])
+    nodes = [i for i in range(num_nodes)]
+    # sum_dist[right][left] stores the sum of shortest paths between left to all nodes connected to right
+    sum_dist = torch.zeros((num_nodes, num_nodes))
+
+    for i in range(hypergraph_order):
+        # In each iteration, we builds a perfect-matching using heuristic stored in sum_dict
+        # We choose k-top maximum values of sum_dist[left][right]
+        # We also make sure these k-top have distinct (left, right) pair
+        left_set = set(nodes)
+        right_set = set(nodes)
+        _, sorted_edge_index = torch.sort(sum_dist.view(1, -1), descending=True)
+        sorted_edge_index = sorted_edge_index.squeeze(0)
+        j = 0
+        left_nodes = []
+        while len(left_set) > 0:
+            index = sorted_edge_index[j].item()
+            left = index % num_nodes
+            right = int(index / num_nodes)
+            if left in left_set and right in right_set:
+                for k in range(num_nodes):
+                    sum_dist[right][k] += dis[k][left]
+                left_set.remove(left)
+                right_set.remove(right)
+                left_nodes += [left]
+            j += 1
+        left_nodes = torch.Tensor(left_nodes)
+        source_nodes = torch.cat((source_nodes, left_nodes))
+        destination_nodes = torch.cat((destination_nodes, right_nodes))
 
     expander_edge_index = torch.cat([source_nodes[None, ...], destination_nodes[None, ...]], dim=0)
     expander_edge_index = coalesce(expander_edge_index)  # Remove duplicate edges
