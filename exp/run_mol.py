@@ -96,7 +96,7 @@ def main():
     parser.add_argument('--expander', dest='expander', type=str2bool, default=True,
                         help='whether to use expander graph propagation')
     parser.add_argument('--expander_graph_generation_method', type=str, default="ramanujan-bipartite",
-                        choices=['perfect-matchings', 'ramanujan-bipartite'],
+                        choices=['perfect-matchings', 'ramanujan-bipartite', 'perfect-matchings-shortest-path'],
                         help='method for generating expander graph')
     parser.add_argument('--expander_graph_order', type=int, default=3,
                         help='order of hypergraph expander graph')
@@ -137,11 +137,11 @@ def main():
 
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
-        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings_heuristics,
+        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings,
                                                          args.expander_graph_order,
                                                          False)
     elif args.expander_graph_generation_method == "perfect-matchings-shortest-path":
-        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings_shortest_paths_heuristics(),
+        expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings_shortest_paths_heuristics,
                                                          args.expander_graph_order,
                                                          False)
     elif args.expander_graph_generation_method == "ramanujan-bipartite":
