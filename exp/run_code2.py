@@ -95,8 +95,8 @@ def main():
                         help='random seed for training')
     parser.add_argument('--device', type=int, default=0,
                         help='which gpu to use if any (default: 0)')
-    parser.add_argument('--gnn', type=str, default='gcn-virtual',
-                        help='GNN gin, gin-virtual, or gcn, or gcn-virtual (default: gcn-virtual)')
+    parser.add_argument('--gnn', type=str, default='gin',
+                        help='GNN gin or gcn, (default: gin)')
     parser.add_argument('--drop_ratio', type=float, default=0,
                         help='dropout ratio (default: 0)')
     parser.add_argument('--max_seq_len', type=int, default=5,
@@ -117,7 +117,7 @@ def main():
     parser.add_argument('--dataset', type=str, default="ogbg-code2",
                         choices = ["ogbg-code2"],
                         help='dataset name (default: ogbg-code2)')
-    parser.add_argument('--expander', dest='expander', type=str2bool, default=False,
+    parser.add_argument('--expander', dest='expander', type=str2bool, default=True,
                         help='whether to use expander graph propagation')
     parser.add_argument('--expander_graph_generation_method', type=str, default="ramanujan-bipartite",
                         choices=['perfect-matchings', 'ramanujan-bipartite'],
@@ -138,12 +138,14 @@ def main():
     if args.expander_graph_generation_method == "perfect-matchings":
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_perfect_matchings,
-            args.expander_graph_order)
+            args.expander_graph_order,
+            "code2")
     elif args.expander_graph_generation_method == "ramanujan-bipartite":
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
             args.expander_graph_order,
-            args.seed)
+            args.seed,
+            "code2")
 
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 

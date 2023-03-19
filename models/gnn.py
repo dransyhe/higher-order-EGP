@@ -314,7 +314,7 @@ class GNN(torch.nn.Module):
         if self.task == "code2":
             pred_list = []
             for i in range(self.max_seq_len):
-                pred_list.append(self.graph_pred_linear[i](h_graph))
+                pred_list.append(self.graph_pred_linear_list[i](h_graph))
             return pred_list
         else:
             return self.graph_pred_linear(h_graph)
