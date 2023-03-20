@@ -315,7 +315,10 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
     consts = []
     for i in range(num_nodes):
         neighbours = adj[i].nonzero()
-        degree_inverse = 1.0 / len(neighbours)
+        if len(neighbours) != 0:
+            degree_inverse = 1.0 / len(neighbours)
+        else:
+            degree_inverse = 0.0
         for j in range(num_nodes):
             coef = torch.zeros((num_nodes * num_nodes,))
             if i == j:
