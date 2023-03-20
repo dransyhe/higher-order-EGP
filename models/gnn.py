@@ -15,7 +15,8 @@ class GNN_node(torch.nn.Module):
         node representations
     """
 
-    def __init__(self, num_layer, emb_dim, task, node_encoder=None, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin'):
+    def __init__(self, num_layer, emb_dim, task, node_encoder=None, drop_ratio=0.5, JK="last", residual=False,
+                 gnn_type='gin'):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
@@ -54,11 +55,17 @@ class GNN_node(torch.nn.Module):
             self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
 
     def forward(self, batched_data):
-        x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
-
         ### computing input node embedding
+        if self.task == "code2":
+            # It has an additional node_depth
+            x, edge_index, edge_attr, node_depth, batch = batched_data.x, batched_data.edge_index, \
+                batched_data.edge_attr, batched_data.node_depth, batched_data.batch
+            h = self.node_encoder(x, node_depth.view(-1, ))
+        else:
+            x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
+            h = self.node_encoder(x)
 
-        h_list = [self.node_encoder(x)]
+        h_list = [h]
         expander_node_mask = torch.ones((x.shape[0], h_list[-1].shape[1]))
         for layer in range(self.num_layer):
             # masking, expander_node_mask, update_nodes)
@@ -95,8 +102,9 @@ class GNN_node_expander(torch.nn.Module):
         node representations
     """
 
-    def __init__(self, num_layer, emb_dim, task, node_encoder=None, drop_ratio=0.5, JK="last", residual=False, gnn_type='gin',
-                       expander_edge_handling="learn-features"):
+    def __init__(self, num_layer, emb_dim, task, node_encoder=None, drop_ratio=0.5, JK="last", residual=False,
+                 gnn_type='gin',
+                 expander_edge_handling="learn-features"):
         '''
             emb_dim (int): node embedding dimensionality
             num_layer (int): number of GNN message passing layers
@@ -131,7 +139,6 @@ class GNN_node_expander(torch.nn.Module):
         self.expander_right_batch_norms = torch.nn.ModuleList()
         self.summation = torch.nn.ModuleList()
 
-
         for layer in range(num_layer):
             if gnn_type == 'gin':
                 self.convs.append(GINConv(emb_dim, task))
@@ -152,12 +159,14 @@ class GNN_node_expander(torch.nn.Module):
 
             if layer != num_layer - 1:
                 if self.expander_edge_handling in ["summation", "summation-mlp"]:
-                    self.summation.append(SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False))
+                    self.summation.append(
+                        SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False))
 
                 self.expander_left_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
                 self.expander_right_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
 
-    def propagate(self, conv, bn, h, edge_index, edge_attr=None, expander_node_mask=None, no_act=False, masking=False, update_nodes="original"):
+    def propagate(self, conv, bn, h, edge_index, edge_attr=None, expander_node_mask=None, no_act=False, masking=False,
+                  update_nodes="original"):
         h_residual = h
         h = conv(h, edge_index, edge_attr, masking, expander_node_mask, update_nodes)
         h = bn(h)
@@ -174,13 +183,13 @@ class GNN_node_expander(torch.nn.Module):
         if self.task == "code2":
             # It has an additional node_depth
             x, edge_index, edge_attr, node_depth, batch, expander_edge_index, expander_node_mask, num_nodes = \
-                batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.node_depth,  batched_data.batch, \
-                batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
+                batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.node_depth, batched_data.batch, \
+                    batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
             h = self.node_encoder(x, node_depth.view(-1, ))
         else:
             x, edge_index, edge_attr, batch, expander_edge_index, expander_node_mask, num_nodes = \
                 batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch, \
-                batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
+                    batched_data.expander_edge_index, batched_data.expander_node_mask, batched_data.num_nodes
             h = self.node_encoder(x)
 
         expander_node_mask = expander_node_mask.unsqueeze(dim=-1)
@@ -195,7 +204,8 @@ class GNN_node_expander(torch.nn.Module):
                 no_act = True
             h = self.propagate(self.convs[layer],
                                self.batch_norms[layer],
-                               h_list[layer], edge_index, edge_attr, masking=False, expander_node_mask=expander_node_mask,
+                               h_list[layer], edge_index, edge_attr, masking=False,
+                               expander_node_mask=expander_node_mask,
                                no_act=no_act, update_nodes="original")
 
             # Propagation on the expander graph
@@ -295,7 +305,7 @@ class GNN(torch.nn.Module):
             if self.task == "code2":
                 self.graph_pred_linear_list = []
                 for i in range(self.max_seq_len):
-                    self.graph_pred_linear_list.append(torch.nn.Linear(2*emb_dim, self.num_class))
+                    self.graph_pred_linear_list.append(torch.nn.Linear(2 * emb_dim, self.num_class))
             else:
                 self.graph_pred_linear = torch.nn.Linear(2 * self.emb_dim, self.num_class)
         else:
