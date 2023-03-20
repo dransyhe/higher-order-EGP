@@ -26,6 +26,7 @@ class GNN_node(torch.nn.Module):
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
         self.JK = JK
+        self.task = task
         ### add residual connection or not
         self.residual = residual
 
