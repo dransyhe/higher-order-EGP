@@ -95,8 +95,8 @@ def main():
                         help='random seed for training')
     parser.add_argument('--device', type=int, default=0,
                         help='which gpu to use if any (default: 0)')
-    parser.add_argument('--gnn', type=str, default='gcn-virtual',
-                        help='GNN gin, gin-virtual, or gcn, or gcn-virtual (default: gcn-virtual)')
+    parser.add_argument('--gnn', type=str, default='gin',
+                        help='GNN gin or gcn, (default: gin)')
     parser.add_argument('--drop_ratio', type=float, default=0,
                         help='dropout ratio (default: 0)')
     parser.add_argument('--max_seq_len', type=int, default=5,
@@ -117,7 +117,7 @@ def main():
     parser.add_argument('--dataset', type=str, default="ogbg-code2",
                         choices = ["ogbg-code2"],
                         help='dataset name (default: ogbg-code2)')
-    parser.add_argument('--expander', dest='expander', type=str2bool, default=False,
+    parser.add_argument('--expander', dest='expander', type=str2bool, default=True,
                         help='whether to use expander graph propagation')
     parser.add_argument('--expander_graph_generation_method', type=str, default="ramanujan-bipartite",
                         choices=['perfect-matchings', 'ramanujan-bipartite'],
@@ -132,18 +132,19 @@ def main():
     # parser.add_argument('--save_dir', type=str, default="",
     #                      help='save_dir to output result (default: )')
     args = parser.parse_args()
-    logging.info(args)
 
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_perfect_matchings,
-            args.expander_graph_order)
+            args.expander_graph_order,
+            "code2")
     elif args.expander_graph_generation_method == "ramanujan-bipartite":
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
             args.expander_graph_order,
-            args.seed)
+            args.seed,
+            "code2")
 
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
@@ -296,6 +297,7 @@ def main():
     test_curve = []
     train_curve = []
 
+    best_val_so_far = 0
     for epoch in range(1, args.epochs + 1):
         logging.info("=====Epoch {}".format(epoch))
         logging.info('Training...')
@@ -314,6 +316,10 @@ def main():
         train_curve.append(train_perf[dataset.eval_metric])
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
+        torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, save_dir + "_curves")
+        if valid_perf[dataset.eval_metric] > best_val_so_far:
+            torch.save(model.state_dict(), save_dir + "best_val_model.pt")
+            best_val_so_far = valid_perf[dataset.eval_metric]
 
     logging.info('F1')
     best_val_epoch = np.argmax(np.array(valid_curve))
@@ -323,9 +329,10 @@ def main():
     logging.info('Test score: {}'.format(test_curve[best_val_epoch]))
 
     if not save_dir == '':
-        result_dict = {'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
-                       'Train': train_curve[best_val_epoch], 'BestTrain': best_train}
-        torch.save(result_dict, save_dir)
+        torch.save({'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
+                    'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, save_dir + "_best")
+        torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, save_dir + "_curves")
+        torch.save(model.state_dict(), save_dir + "final_model.pt")
 
 
 if __name__ == "__main__":
