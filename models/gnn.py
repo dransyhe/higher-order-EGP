@@ -208,12 +208,11 @@ class GNN_node_expander(torch.nn.Module):
                         masking = True
                     else:
                         masking = False
-                    pass_expander_node_mask = expander_node_mask
                     h = self.propagate(self.expander_left_convs[layer],
                                        self.expander_left_batch_norms[layer],
                                        h, expander_edge_index,
                                        masking=masking,
-                                       expander_node_mask=pass_expander_node_mask,
+                                       expander_node_mask=expander_node_mask,
                                        update_nodes="expander")
 
                 # from right to left
@@ -221,7 +220,7 @@ class GNN_node_expander(torch.nn.Module):
                 h = self.propagate(self.expander_right_convs[layer],
                                    self.expander_right_batch_norms[layer],
                                    h, reverse_expander_edge_index, masking=False,
-                                   expander_node_mask=pass_expander_node_mask, update_nodes="original")
+                                   expander_node_mask=expander_node_mask, update_nodes="original")
 
             # TODO: (can have other options) now only saves h at the end of three propagations
             h_list.append(h)
