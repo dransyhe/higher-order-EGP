@@ -132,7 +132,6 @@ def main():
     # parser.add_argument('--save_dir', type=str, default="",
     #                      help='save_dir to output result (default: )')
     args = parser.parse_args()
-    logging.info(args)
 
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
