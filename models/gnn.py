@@ -59,9 +59,12 @@ class GNN_node(torch.nn.Module):
         ### computing input node embedding
 
         h_list = [self.node_encoder(x)]
+        expander_node_mask = torch.ones((x.shape[0], h_list[-1].shape[1]))
         for layer in range(self.num_layer):
-
-            h = self.convs[layer](h_list[layer], edge_index, edge_attr)
+            # masking, expander_node_mask, update_nodes)
+            h = self.convs[layer](h_list[layer], edge_index, edge_attr,
+                                  masking=False, expander_node_mask=expander_node_mask,
+                                  update_nodes="original")
             h = self.batch_norms[layer](h)
 
             if layer == self.num_layer - 1:
