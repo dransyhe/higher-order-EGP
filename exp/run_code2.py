@@ -317,6 +317,7 @@ def main():
         train_curve.append(train_perf[dataset.eval_metric])
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
+        torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, save_dir + "_curves")
         if valid_perf[dataset.eval_metric] > best_val_so_far:
             torch.save(model.state_dict(), save_dir + "best_val_model.pt")
             best_val_so_far = valid_perf[dataset.eval_metric]
