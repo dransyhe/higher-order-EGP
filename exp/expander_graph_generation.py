@@ -292,7 +292,7 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
                              'hypergraph', though some 'edges' may be of a lower order as we don't enforce that the
                              matchings are disjoint.
     :param data: graph to be augmented
-    :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
+    :param dataset: dataset which is being augmented
     :return: updated graph with additional attributes for expander graph
     """
     if dataset == "ppa":
@@ -332,8 +332,14 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
     coefs = torch.stack(coefs)
     consts = torch.cat(consts)
     # Solve the set of linear equations
-    # TODO: when h is singular
-    h = torch.linalg.solve(coefs, consts)
+    try:
+        h = torch.linalg.solve(coefs, consts)
+    except RuntimeError:
+        # When coefs is a singular matrix, we revert to perfect-matchings without heuristics
+        return add_expander_edges_via_perfect_matchings(
+            hypergraph_order = hypergraph_order,
+            dataset = dataset,
+            data = data)
     # Reshape h to get the matrix
     h = h.reshape(num_nodes, num_nodes)
 
