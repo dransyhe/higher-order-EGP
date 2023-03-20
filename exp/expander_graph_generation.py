@@ -257,8 +257,10 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
     Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
     For each node in the original graph, we add a node in the bipartite graph. We then generate 'hypergraph_order'
     perfect matchings of the resulting bipartite graph, and store these edges in the 'expander_edge_index' attribute
-    of the 'data'. The perfect matchings use a heuristic based on the sum of shortest paths between each pair of nodes
-    connected by each hyperedge.
+    of the 'data'. The perfect matchings use a heuristic based on the sum of access times between each pair of nodes
+    connected by each hyperedge. The access time was computed solving the set of linear equations as described in
+    Theorem 3.1 of
+    https://arxiv.org/pdf/1208.2171.pdf#:~:text=Let%20n%20be%20the%20number,can%20be%20proven%20using%20induction.
     We add the expander graph 'edge nodes' to the original graph nodes in 'data.x', and add an
     'expander_node_mask' attribute, where expander_node_mask[i] == 1 if data.x[i] is a node belonging to the original
     graph, and is 0 if data.x[i] is an 'edge node' belonging to the expander graph.
@@ -304,7 +306,7 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
             coefs += [coef]
             consts += [const]
 
-    coefs = torch.stack(coefs, dim=-1)
+    coefs = torch.stack(coefs)
     consts = torch.cat(consts)
     # Solve the set of linear equations
     h = torch.linalg.solve(coefs, consts)
