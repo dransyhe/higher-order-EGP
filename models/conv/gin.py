@@ -30,17 +30,24 @@ class GINConv(MessagePassing):
         else:
             raise NotImplementedError
 
-    def forward(self, x, edge_index, edge_attr=None, expander_node_mask=None):
+    def forward(self, x, edge_index, edge_attr=None, masking=False, expander_node_mask=None, update_nodes="original"):
         if edge_attr is not None:
             edge_embedding = self.edge_encoder(edge_attr)
         else:
             edge_embedding = None
 
         # set expander_node_feature to 0-vector
-        if expander_node_mask is not None:
+        if masking:
             x = x * expander_node_mask
 
         out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x=x, edge_attr=edge_embedding))
+
+        if update_nodes == "expander":
+            # Don't update original nodes on left -> right
+            out = (1 - expander_node_mask) * out + expander_node_mask * x
+        elif update_nodes == "original":
+            # Don't update hyperedge nodes on right -> left
+            out = expander_node_mask * out + (1 - expander_node_mask) * x
 
         return out
 
