@@ -136,9 +136,9 @@ class GNN_node_expander(torch.nn.Module):
             self.expander_left_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
             self.expander_right_batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
 
-    def propagate(self, conv, bn, h, edge_index, edge_attr=None, expander_node_mask=None):
+    def propagate(self, conv, bn, h, edge_index, edge_attr=None, expander_node_mask=None, masking=False, update_nodes="original"):
         h_residual = h
-        h = conv(h, edge_index, edge_attr, expander_node_mask)
+        h = conv(h, edge_index, edge_attr, masking, expander_node_mask, update_nodes)
         h = bn(h)
         h = F.relu(h)
 
@@ -164,28 +164,31 @@ class GNN_node_expander(torch.nn.Module):
             # Propagation on the original graph
             h = self.propagate(self.convs[layer],
                                self.batch_norms[layer],
-                               h_list[layer], edge_index, edge_attr)
+                               h_list[layer], edge_index, edge_attr, expander_node_mask=expander_node_mask, masking=False,
+                               update_nodes="original")
 
             # Propagation on the expander graph
             # from left to right.
             if self.expander_edge_handling in ["summation", "summation-mlp"]:
                 h = h * expander_node_mask
                 h_edge = self.summation[layer](h, expander_edge_index)
-                h = h + h_edge
+                h = h + h_edge * (1 - expander_node_mask)
             else:
-                if self.expander_edge_handling == "learn-features":
-                    pass_expander_node_mask = None
+                if self.expander_edge_handling == "masking":
+                    masking = True
                 else:
-                    pass_expander_node_mask = expander_node_mask
+                    masking = False
                 h = self.propagate(self.expander_left_convs[layer],
                                    self.expander_left_batch_norms[layer],
                                    h, expander_edge_index,
-                                   expander_node_mask=pass_expander_node_mask)
+                                   expander_node_mask=expander_node_mask, masking=masking, update_nodes="expander")
+
             # from right to left
             reverse_expander_edge_index = expander_edge_index[[1, 0]]
             h = self.propagate(self.expander_right_convs[layer],
                                self.expander_right_batch_norms[layer],
-                               h, reverse_expander_edge_index)
+                               h, reverse_expander_edge_index, expander_node_mask=expander_node_mask, masking=False,
+                               update_nodes="original")
 
             h = self.layer_norms[layer](h)
             # TODO: (can have other options) now only saves h at the end of three propagations
