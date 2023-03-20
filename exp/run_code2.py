@@ -298,6 +298,7 @@ def main():
     test_curve = []
     train_curve = []
 
+    best_val_so_far = 0
     for epoch in range(1, args.epochs + 1):
         logging.info("=====Epoch {}".format(epoch))
         logging.info('Training...')
@@ -316,6 +317,9 @@ def main():
         train_curve.append(train_perf[dataset.eval_metric])
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
+        if valid_perf[dataset.eval_metric] > best_val_so_far:
+            torch.save(model.state_dict(), save_dir + "best_val_model.pt")
+            best_val_so_far = valid_perf[dataset.eval_metric]
 
     logging.info('F1')
     best_val_epoch = np.argmax(np.array(valid_curve))
@@ -325,9 +329,10 @@ def main():
     logging.info('Test score: {}'.format(test_curve[best_val_epoch]))
 
     if not save_dir == '':
-        result_dict = {'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
-                       'Train': train_curve[best_val_epoch], 'BestTrain': best_train}
-        torch.save(result_dict, save_dir)
+        torch.save({'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch],
+                    'Train': train_curve[best_val_epoch], 'BestTrain': best_train}, save_dir + "_best")
+        torch.save({'Val': valid_curve, 'Test': test_curve, 'Train': train_curve}, save_dir + "_curves")
+        torch.save(model.state_dict(), save_dir + "final_model.pt")
 
 
 if __name__ == "__main__":

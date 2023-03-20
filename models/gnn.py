@@ -292,7 +292,7 @@ class GNN(torch.nn.Module):
                 self.graph_pred_linear = torch.nn.Linear(2 * self.emb_dim, self.num_class)
         else:
             if self.task == "code2":
-                self.graph_pred_linear_list = []
+                self.graph_pred_linear_list = torch.nn.ModuleList()
                 for i in range(self.max_seq_len):
                     self.graph_pred_linear_list.append(torch.nn.Linear(emb_dim, self.num_class))
             else:
