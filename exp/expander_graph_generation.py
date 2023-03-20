@@ -8,7 +8,7 @@ from torch_geometric.utils import coalesce, convert, to_dense_adj, k_hop_subgrap
 
 
 def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
-                                             ppa: bool,
+                                             dataset: str,
                                              data: Data):
     """
     Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
@@ -22,10 +22,10 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
                              'hypergraph', though some 'edges' may be of a lower order as we don't enforce that the
                              matchings are disjoint.
     :param data: graph to be augmented
-    :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
+    :param dataset: dataset which is being augmented
     :return: updated graph with additional attributes for expander graph
     """
-    if ppa:
+    if dataset == "ppa":
         # ppa dataset requires manual addition of node features
         data.x = torch.zeros(data.num_nodes, dtype=torch.long)
     new_data = data
@@ -55,12 +55,18 @@ def add_expander_edges_via_perfect_matchings(hypergraph_order: int,
     new_data['expander_node_mask'] = expander_node_mask
     new_data['x'] = expander_graph_x
     new_data['num_nodes'] = new_num_nodes
+    if dataset == "code2":
+        # In code2 nodes have an additional "node_depth" feature. We set this to 0 for the expander graph edge nodes, but
+        # it could be initialised to any value as these nodes have their features set to 0 at the start of training.
+        expander_graph_edge_node_depths = torch.zeros(data.node_depth.shape, dtype=data.node_depth.dtype)
+        expander_graph_node_depths = torch.concat((data.node_depth, expander_graph_edge_node_depths))
+        new_data['node_depth'] = expander_graph_node_depths
     return new_data
 
 
 def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
                                                      random_seed: int,
-                                                     ppa: bool,
+                                                     dataset: str,
                                                      data: Data):
     """
      Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
@@ -76,10 +82,10 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
      :param hypergraph_order: number of perfect matchings to generate. This is the order of the resulting 'hypergraph'.
      :param random_seed: random seed for generating the expander graphs.
      :param data: graph to be augmented
-     :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
+     :param dataset: dataset which is being augmented
      :return: updated graph with additional attributes for expander graph
      """
-    if ppa:
+    if dataset == "ppa":
         # ppa dataset requires manual addition of node features
         data.x = torch.zeros(data.num_nodes, dtype=torch.long)
     new_data = data
@@ -122,14 +128,19 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
             # If there are more (or equal) nodes in the original graph than the hypergraph order, then there should
             # be 'hypergraph_order' * 'num_nodes' unique edges in the graph
             assert expander_edge_index.shape[1] == hypergraph_order * num_nodes
-        graph_data = Data(edge_index=expander_edge_index, num_nodes=num_nodes * 2)
-        nx_graph = convert.to_networkx(graph_data)
-        connected = nx.is_connected(nx_graph.to_undirected())
-        adj_matrix = nx.adjacency_matrix(nx_graph.to_undirected())
-        adj_eigenvalues = np.sort(np.linalg.eigvals(adj_matrix.toarray()))
-        second_largest_eigenvalue = max(abs(adj_eigenvalues[1]), adj_eigenvalues[-2])
-        ramanujan = second_largest_eigenvalue <= 2 * math.sqrt(hypergraph_order - 1)
-        random_seed_offset += 1
+        if dataset != "code2" and dataset != "ppa":
+            # calculating eigenvalues of adjacency matrix is too slow for code2 and ppa graphs
+            graph_data = Data(edge_index=expander_edge_index, num_nodes=num_nodes * 2)
+            nx_graph = convert.to_networkx(graph_data)
+            connected = nx.is_connected(nx_graph.to_undirected())
+            adj_matrix = nx.adjacency_matrix(nx_graph.to_undirected())
+            adj_eigenvalues = np.sort(np.linalg.eigvals(adj_matrix.toarray()))
+            second_largest_eigenvalue = max(abs(adj_eigenvalues[1]), adj_eigenvalues[-2])
+            ramanujan = second_largest_eigenvalue <= 2 * math.sqrt(hypergraph_order - 1)
+            random_seed_offset += 1
+        else:
+            connected = True
+            ramanujan = True
 
     ones = torch.ones(num_nodes)
     zeros = torch.zeros(num_nodes)
@@ -138,11 +149,17 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
     new_data['expander_node_mask'] = expander_node_mask
     new_data['x'] = expander_graph_x
     new_data['num_nodes'] = new_num_nodes
+    if dataset == "code2":
+        # In code2 nodes have an additional "node_depth" feature. We set this to 0 for the expander graph edge nodes, but
+        # it could be initialised to any value as these nodes have their features set to 0 at the start of training.
+        expander_graph_edge_node_depths = torch.zeros(data.node_depth.shape, dtype=data.node_depth.dtype)
+        expander_graph_node_depths = torch.concat((data.node_depth, expander_graph_edge_node_depths))
+        new_data['node_depth'] = expander_graph_node_depths
     return new_data
 
 
 def add_expander_edges_via_perfect_matchings_shortest_paths_heuristics(hypergraph_order: int,
-                                                                       ppa: bool,
+                                                                       dataset: str,
                                                                        data: Data):
     """
     Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
@@ -158,10 +175,10 @@ def add_expander_edges_via_perfect_matchings_shortest_paths_heuristics(hypergrap
                              'hypergraph', though some 'edges' may be of a lower order as we don't enforce that the
                              matchings are disjoint.
     :param data: graph to be augmented
-    :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
+    :param dataset: dataset which is being augmented
     :return: updated graph with additional attributes for expander graph
     """
-    if ppa:
+    if dataset == "ppa":
         # ppa dataset requires manual addition of node features
         data.x = torch.zeros(data.num_nodes, dtype=torch.long)
     new_data = data
@@ -247,11 +264,17 @@ def add_expander_edges_via_perfect_matchings_shortest_paths_heuristics(hypergrap
     new_data['expander_node_mask'] = expander_node_mask
     new_data['x'] = expander_graph_x
     new_data['num_nodes'] = new_num_nodes
+    if dataset == "code2":
+        # In code2 nodes have an additional "node_depth" feature. We set this to 0 for the expander graph edge nodes, but
+        # it could be initialised to any value as these nodes have their features set to 0 at the start of training.
+        expander_graph_edge_node_depths = torch.zeros(data.node_depth.shape, dtype=data.node_depth.dtype)
+        expander_graph_node_depths = torch.concat((data.node_depth, expander_graph_edge_node_depths))
+        new_data['node_depth'] = expander_graph_node_depths
     return new_data
 
 
 def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_order: int,
-                                                                    ppa: bool,
+                                                                    dataset: str,
                                                                     data: Data):
     """
     Augments graph in 'data' with a new bipartite graph representation of a hypergraph for use as an expander graph.
@@ -272,7 +295,7 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
     :param ppa: boolean declaring whether we're performing augmentation on the ppa dataset
     :return: updated graph with additional attributes for expander graph
     """
-    if ppa:
+    if dataset == "ppa":
         # ppa dataset requires manual addition of node features
         data.x = torch.zeros(data.num_nodes, dtype=torch.long)
     new_data = data
@@ -285,8 +308,8 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
     adj = to_dense_adj(data.edge_index, max_num_nodes=num_nodes)[0]
     assert (torch.all(adj == adj.T))
     # Replace diagonal values with 0
-    for i in range(num_nodes):
-        adj[i][i] = 0.
+    # for i in range(num_nodes):
+        # adj[i][i] = 0.
     # Compute coefficient (left) and constants (right) for the set of linear equations
     coefs = []
     consts = []
@@ -309,6 +332,7 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
     coefs = torch.stack(coefs)
     consts = torch.cat(consts)
     # Solve the set of linear equations
+    # TODO: when h is singular
     h = torch.linalg.solve(coefs, consts)
     # Reshape h to get the matrix
     h = h.reshape(num_nodes, num_nodes)
@@ -375,4 +399,10 @@ def add_expander_edges_via_perfect_matchings_access_time_heuristics(hypergraph_o
     new_data['expander_node_mask'] = expander_node_mask
     new_data['x'] = expander_graph_x
     new_data['num_nodes'] = new_num_nodes
+    if dataset == "code2":
+        # In code2 nodes have an additional "node_depth" feature. We set this to 0 for the expander graph edge nodes, but
+        # it could be initialised to any value as these nodes have their features set to 0 at the start of training.
+        expander_graph_edge_node_depths = torch.zeros(data.node_depth.shape, dtype=data.node_depth.dtype)
+        expander_graph_node_depths = torch.concat((data.node_depth, expander_graph_edge_node_depths))
+        new_data['node_depth'] = expander_graph_node_depths
     return new_data

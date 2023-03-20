@@ -141,20 +141,20 @@ def main():
     if args.expander_graph_generation_method == "perfect-matchings":
         expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings,
                                                          args.expander_graph_order,
-                                                         False)
+                                                         "mol")
     elif args.expander_graph_generation_method == "perfect-matchings-shortest-path":
         expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings_shortest_paths_heuristics,
                                                          args.expander_graph_order,
-                                                         False)
+                                                         "mol")
     elif args.expander_graph_generation_method == "perfect-matchings-access-time":
         expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_perfect_matchings_access_time_heuristics,
                                                          args.expander_graph_order,
-                                                         False)
+                                                         "mol")
     elif args.expander_graph_generation_method == "ramanujan-bipartite":
         expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
                                                          args.expander_graph_order,
                                                          args.seed,
-                                                         False)
+                                                         "mol")
 
     ### automatic dataloading and splitting
     if not args.expander:
