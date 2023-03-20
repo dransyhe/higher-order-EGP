@@ -192,7 +192,8 @@ class GNN_node_expander(torch.nn.Module):
                 no_act = True
             h = self.propagate(self.convs[layer],
                                self.batch_norms[layer],
-                               h_list[layer], edge_index, edge_attr, masking=False, no_act=no_act, update_nodes="original")
+                               h_list[layer], edge_index, edge_attr, masking=False, expander_node_mask=expander_node_mask,
+                               no_act=no_act, update_nodes="original")
 
             # Propagation on the expander graph
             # from left to right. We don't do this in
