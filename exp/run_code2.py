@@ -111,7 +111,7 @@ def main():
                         help='input batch size for training (default: 128)')
     parser.add_argument('--epochs', type=int, default=25,
                         help='number of epochs to train (default: 25)')
-    parser.add_argument('--random_split', dest='random_split', type=str2bool, default=True)
+    parser.add_argument('--random_split', dest='random_split', type=str2bool, default=False)
     parser.add_argument('--num_workers', type=int, default=0,
                         help='number of workers (default: 0)')
     parser.add_argument('--dataset', type=str, default="ogbg-code2",
