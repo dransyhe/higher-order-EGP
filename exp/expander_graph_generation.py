@@ -34,7 +34,7 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
     connected = False
     ramanujan = False
     while not (connected and ramanujan):
-        all_destination_nodes = torch.tensor([])
+        all_destination_nodes = torch.tensor([], dtype=torch.int64)
         for i in range(hypergraph_order):
             valid_shuffle = False
             while not valid_shuffle:
@@ -58,7 +58,6 @@ def add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order: int,
 
         expander_edge_index = torch.cat((all_source_nodes[None, ...], all_destination_nodes[None, ...]), dim=0)
         expander_edge_index = coalesce(expander_edge_index)
-        expander_edge_index = expander_edge_index.to(torch.int64)
         if num_nodes >= hypergraph_order:
             # If there are more (or equal) nodes in the original graph than the hypergraph order, then there should
             # be 'hypergraph_order' * 'num_nodes' unique edges in the graph
