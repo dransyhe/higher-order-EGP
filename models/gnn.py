@@ -37,7 +37,7 @@ class GNN_node(torch.nn.Module):
             if gnn_type == 'gin':
                 self.convs.append(GINConv(emb_dim, task))
             else:
-                raise ValueError('Only GIN currently supported.'))
+                raise ValueError('Only GIN currently supported.')
 
             self.layer_norms.append(torch.nn.LayerNorm(emb_dim))
 
