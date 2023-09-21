@@ -93,27 +93,23 @@ class GNN_node_expander(torch.nn.Module):
         self.convs = torch.nn.ModuleList()
         self.layer_norms = torch.nn.ModuleList()
         self.expander_left_convs = torch.nn.ModuleList()
-        self.expander_left_layer_norms = torch.nn.ModuleList()
         self.expander_right_convs = torch.nn.ModuleList()
-        self.expander_right_layer_norms = torch.nn.ModuleList()
         self.summation = torch.nn.ModuleList()
 
         for _ in range(num_layer):
             if gnn_type == 'gin':
                 self.convs.append(GINConv(emb_dim, task))
-                self.layer_norms.append(torch.nn.LayerNorm(emb_dim))
                 if self.expander_edge_handling not in ["summation", "summation-mlp"]:
                     self.expander_left_convs.append(GINConv(emb_dim, task, flow="source_to_target"))
-                    self.expander_left_layer_norms.append(torch.nn.LayerNorm(emb_dim))
                 self.expander_right_convs.append(GINConv(emb_dim, task, flow="source_to_target"))
-                self.expander_right_layer_norms.append(torch.nn.LayerNorm(emb_dim))
             else:
-                raise ValueError('Undefined GNN type called {}'.format(gnn_type))           
+                raise ValueError('Undefined GNN type called {}'.format(gnn_type))  
+
+            self.layer_norms.append(torch.nn.LayerNorm(emb_dim))         
 
             if self.expander_edge_handling in ["summation", "summation-mlp"]:
                 self.summation.append(
                     SumConv(emb_dim, mlp=True if self.expander_edge_handling == "summation-mlp" else False))
-                self.expander_left_layer_norms.append(torch.nn.LayerNorm(emb_dim))
 
 
     def propagate(self, conv, h, edge_index, edge_attr=None, expander_node_mask=None, masking=False, update_nodes="original"):
@@ -148,7 +144,6 @@ class GNN_node_expander(torch.nn.Module):
             h = self.propagate(self.convs[layer],
                                h_list[layer], edge_index, edge_attr, expander_node_mask=expander_node_mask, masking=False,
                                update_nodes="original")
-            h = self.layer_norms[layer](h)
 
             # Propagation on the expander graph
             # from left to right.
@@ -164,7 +159,6 @@ class GNN_node_expander(torch.nn.Module):
                 h = self.propagate(self.expander_left_convs[layer],
                                    h, expander_edge_index,
                                    expander_node_mask=expander_node_mask, masking=masking, update_nodes="expander")
-            h = self.expander_left_layer_norms[layer](h)
 
             # from right to left
             reverse_expander_edge_index = expander_edge_index[[1, 0]]
@@ -172,7 +166,7 @@ class GNN_node_expander(torch.nn.Module):
                                h, reverse_expander_edge_index, expander_node_mask=expander_node_mask, masking=False,
                                update_nodes="original")
 
-            h = self.expander_right_layer_norms[layer](h)
+            h = self.layer_norms[layer](h)
             h_list.append(h)
 
         node_representation = h_list[-1]
