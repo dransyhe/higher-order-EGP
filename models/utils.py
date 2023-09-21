@@ -1,7 +1,7 @@
 import torch
-from collections import Counter
 import numpy as np
 import torch
+import random
 from distutils.util import strtobool
 
 
@@ -189,6 +189,15 @@ def str2bool(x):
         return bool(strtobool(x))
     else:
         raise ValueError(f'Unrecognised type {type(x)}')
+
+
+def set_seed(seed):
+    # Set the seed for everything
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 def test():

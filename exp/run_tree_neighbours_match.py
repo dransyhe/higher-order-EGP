@@ -1,13 +1,14 @@
+# Taken from https://github.com/tech-srl/bottleneck/blob/main/main.py and
+# https://github.com/tech-srl/bottleneck/blob/main/experiment.py and adapted for
+# enabling to run with expander graphs.
 import torch
-import numpy as np
-import random
 from torch_geometric.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from argparse import ArgumentParser
 from attrdict import AttrDict
-from models.gnn import GNN, TreeNeighboursGNN
-from tree_neighbours_match.common import Task, GNN_TYPE, STOP
-from models.utils import str2bool
+from models.gnn import GNN
+from tree_neighbours_match.common import Task, STOP
+from models.utils import str2bool, set_seed
 
 
 class Experiment:
@@ -32,31 +33,19 @@ class Experiment:
         self.random_seed = args.random_seed
         self.expander_edge_handling = args.expander_edge_handling
 
-        torch.manual_seed(self.random_seed)
-        np.random.seed(self.random_seed)
-        random.seed(self.random_seed)
+        set_seed(self.random_seed)
 
         self.X_train, self.X_test, dim0, out_dim, self.criterion = \
             self.task.get_dataset(self.depth, self.train_fraction, expander=self.expander,
                                   hypergraph_order=self.hypergraph_order, random_seed=self.random_seed)
-
-        # if self.gnn == 'gin':
-        #     self.model = TreeNeighboursGNN(gnn_type='gin', num_layers=self.num_layers, dim0=dim0, h_dim=self.emb_dim,
-        #                                    out_dim=out_dim, layer_norm=not args.no_layer_norm, use_activation=not args.no_activation,
-        #                                    use_residual=not args.no_residual).to(self.device)
 
         if self.gnn == 'gin':
             self.model = GNN(gnn_type='gin', task="tree_neighbours_match", num_layer=self.num_layers,
                              emb_dim=self.emb_dim, expander=self.expander,
                              expander_edge_handling=self.expander_edge_handling, tree_neighbours_dim0=dim0,
                              tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
-        elif self.gnn == 'gcn':
-            self.model = GNN(gnn_type='gcn', task="tree_neighbours_match", num_layer=self.num_layers,
-                             emb_dim=self.emb_dim, expander=self.expander,
-                             expander_edge_handling=self.expander_edge_handling, tree_neighbours_dim0=dim0,
-                             tree_neighbours_out_dim=out_dim, residual=True).to(self.device)
         else:
-            raise ValueError('Invalid GNN type')
+            raise ValueError('Invalid GNN type. Only GIN is currently supported.')
 
         print(f'Starting experiment')
         self.print_args(args)
@@ -180,9 +169,9 @@ def main():
     parser.add_argument("--task", dest="task", default=Task.NEIGHBORS_MATCH, type=Task.from_string, choices=list(Task),
                         required=False)
     parser.add_argument("--gnn", dest="gnn", default="gin", type=str,
-                        help='GNN gin, gin-virtual, or gcn, or gcn-virtual (default: gin-virtual)')
+                        help='GNN type (default: gin)', choices=['gin'])
     parser.add_argument("--emb_dim", dest="emb_dim", default=32, type=int,
-                        required=False)  # TODO: This is lower than OGB
+                        required=False)  
     parser.add_argument("--depth", dest="depth", default=5, type=int, required=False)
     parser.add_argument("--num_layers", dest="num_layers", default=3, type=int,
                         required=False)  # Use (depth+1) in original paper
@@ -202,7 +191,7 @@ def main():
     parser.add_argument('--hypergraph_order', type=int, default=3,
                         help='order of hypergraph expander graph')
     parser.add_argument('--random_seed', type=int, default=42,
-                        help='random seed used when generating ramanujan bipartite graphs')
+                        help='random seed')
     parser.add_argument('--expander_edge_handling', type=str, default='learn-features',
                         choices=['masking', 'learn-features', 'summation', 'summation-mlp'],
                         help='method to handle expander edge nodes')

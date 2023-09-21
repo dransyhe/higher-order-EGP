@@ -1,7 +1,7 @@
 import torch
 from torch_geometric.nn import MessagePassing
 import torch.nn.functional as F
-from ogb.graphproppred.mol_encoder import AtomEncoder,BondEncoder
+from ogb.graphproppred.mol_encoder import BondEncoder
 
 
 ### GIN convolution along the graph structure
@@ -21,7 +21,9 @@ class GINConv(MessagePassing):
         self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, emb_dim),
                                        torch.nn.BatchNorm1d(emb_dim),
                                        torch.nn.ReLU(),
-                                       torch.nn.Linear(emb_dim, emb_dim))
+                                       torch.nn.Linear(emb_dim, emb_dim),
+                                       torch.nn.BatchNorm1d(emb_dim),
+                                       torch.nn.ReLU())
         self.eps = torch.nn.Parameter(torch.Tensor([0]))
         if task == "mol":
             self.edge_encoder = BondEncoder(emb_dim=emb_dim)
@@ -30,7 +32,6 @@ class GINConv(MessagePassing):
         elif task == "code2":
             self.edge_encoder = torch.nn.Linear(2, emb_dim)
         elif task == "tree_neighbours_match":
-            # TODO: Double check that they don't use edge encodings
             self.edge_encoder = None
         else:
             raise NotImplementedError
@@ -47,12 +48,13 @@ class GINConv(MessagePassing):
 
         out = self.mlp((1 + self.eps) * x + self.propagate(edge_index, x=x, edge_attr=edge_embedding))
 
-        if update_nodes == "expander":
-            # Don't update original nodes on left -> right
-            out = (1 - expander_node_mask) * out + expander_node_mask * x
-        elif update_nodes == "original":
-            # Don't update hyperedge nodes on right -> left
-            out = expander_node_mask * out + (1 - expander_node_mask) * x
+        if expander_node_mask is not None:
+            if update_nodes == "expander":
+                # Don't update original nodes on left -> right
+                out = (1 - expander_node_mask) * out + expander_node_mask * x
+            elif update_nodes == "original":
+                # Don't update hyperedge nodes on right -> left
+                out = expander_node_mask * out + (1 - expander_node_mask) * x
 
         return out
 

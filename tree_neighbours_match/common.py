@@ -22,7 +22,7 @@ class Task(Enum):
         else:
             dataset = None
 
-        return dataset.generate_data(train_fraction, expander, hypergraph_order, random_seed)
+        return dataset.generate_data(train_fraction, expander, hypergraph_order)
 
 
 class GNN_TYPE(Enum):

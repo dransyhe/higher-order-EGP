@@ -1,3 +1,5 @@
+# Taken from https://github.com/tech-srl/bottleneck/blob/main/tasks/tree_dataset.py and
+# adapted to enable expander graphs to be added.
 import exp.expander_graph_generation as expander_graph_generation
 import torch
 import torch_geometric
@@ -42,7 +44,7 @@ class TreeDataset(object):
             edge_index, _ = torch_geometric.utils.add_remaining_self_loops(edge_index=edge_index, )
         return edge_index
 
-    def generate_data(self, train_fraction, expander=False, hypergraph_order=None, random_seed=None):
+    def generate_data(self, train_fraction, expander=False, hypergraph_order=None):
         data_list = []
 
         for comb in self.get_combinations():
@@ -52,7 +54,7 @@ class TreeDataset(object):
             label = self.label(comb)
             if expander:
                 original_data = Data(x=nodes, edge_index=edge_index, root_mask=root_mask, y=label)
-                expander_augmented_data = expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order, random_seed, original_data)
+                expander_augmented_data = expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph(hypergraph_order, original_data)
                 data_list.append(expander_augmented_data)
             else:
                 data_list.append(Data(x=nodes, edge_index=edge_index, root_mask=root_mask, y=label))

@@ -1,3 +1,4 @@
+# Taken from https://github.com/tech-srl/bottleneck/blob/main/tasks/dictionary_lookup.py
 import numpy as np
 import itertools
 import random
