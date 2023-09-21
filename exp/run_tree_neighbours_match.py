@@ -176,7 +176,7 @@ def main():
     parser.add_argument("--num_layers", dest="num_layers", default=3, type=int,
                         required=False)  # Use (depth+1) in original paper
     parser.add_argument("--train_fraction", dest="train_fraction", default=0.8, type=float, required=False)
-    parser.add_argument("--max_epochs", dest="max_epochs", default=50000, type=int, required=False)
+    parser.add_argument("--max_epochs", dest="max_epochs", default=10000, type=int, required=False)
     parser.add_argument("--eval_every", dest="eval_every", default=100, type=int, required=False)
     parser.add_argument("--batch_size", dest="batch_size", default=1024, type=int, required=False)
     parser.add_argument("--accum_grad", dest="accum_grad", default=1, type=int, required=False)
