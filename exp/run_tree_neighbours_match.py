@@ -5,7 +5,6 @@ import torch
 from torch_geometric.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from argparse import ArgumentParser
-from attrdict import AttrDict
 from models.gnn import GNN
 from tree_neighbours_match.common import Task, STOP
 from models.utils import str2bool, set_seed
@@ -52,12 +51,8 @@ class Experiment:
         print(f'Training examples: {len(self.X_train)}, test examples: {len(self.X_test)}')
 
     def print_args(self, args):
-        if type(args) is AttrDict:
-            for key, value in args.items():
-                print(f"{key}: {value}")
-        else:
-            for arg in vars(args):
-                print(f"{arg}: {getattr(args, arg)}")
+        for arg in vars(args):
+            print(f"{arg}: {getattr(args, arg)}")
         print()
 
     def run(self):
