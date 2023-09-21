@@ -4,13 +4,11 @@ import logging
 import torch
 from torch_geometric.loader import DataLoader
 import torch.optim as optim
-import torch.nn.functional as F
 from models.gnn import GNN
 from exp import expander_graph_generation
 
 from tqdm import tqdm
 import argparse
-import time
 import numpy as np
 
 ### importing OGB
@@ -155,7 +153,6 @@ def main():
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
             args.expander_graph_order,
-            args.seed,
             "ppa")
 
     ### automatic dataloading and splitting
@@ -208,11 +205,8 @@ def main():
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
         if valid_perf[dataset.eval_metric] > best_val_so_far:
-            # TODO: Check how long saving the model takes (shouldn't be too long) so we don't slow the training process
-            start_time = time.time()
             torch.save(model.state_dict(), save_dir + "best_val_model.pt")
             best_val_so_far = valid_perf[dataset.eval_metric]
-            logging.info(f"Time taken to save model: {time.time() - start_time}")
 
     best_val_epoch = np.argmax(np.array(valid_curve))
     best_train = max(train_curve)

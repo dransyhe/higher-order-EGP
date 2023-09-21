@@ -1,10 +1,8 @@
 import functools
 import argparse
 import numpy as np
-import time
 import os
 import logging
-import random
 import torch
 import torch.optim as optim
 from tqdm import tqdm
@@ -153,7 +151,6 @@ def main():
     elif args.expander_graph_generation_method == "ramanujan-bipartite":
         expander_graph_generation_fn = functools.partial(expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
                                                          args.expander_graph_order,
-                                                         args.seed,
                                                          "mol")
 
     ### automatic dataloading and splitting
@@ -214,11 +211,8 @@ def main():
         valid_curve.append(valid_perf[dataset.eval_metric])
         test_curve.append(test_perf[dataset.eval_metric])
         if 'classification' in dataset.task_type and valid_perf[dataset.eval_metric] > best_val_so_far:
-            # TODO: Check how long saving the model takes (shouldn't be too long) so we don't slow the training process
-            start_time = time.time()
             torch.save(model.state_dict(), save_dir + "best_val_model.pt")
             best_val_so_far = valid_perf[dataset.eval_metric]
-            logging.info(f"Time taken to save model: {time.time() - start_time}")
 
     if 'classification' in dataset.task_type:
         best_val_epoch = np.argmax(np.array(valid_curve))

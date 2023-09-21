@@ -3,14 +3,12 @@ import logging
 import torch
 from torch_geometric.loader import DataLoader
 import torch.optim as optim
-import torch.nn.functional as F
 from torchvision import transforms
 from models.gnn import GNN
 from exp import expander_graph_generation
 
 from tqdm import tqdm
 import argparse
-import time
 import numpy as np
 import pandas as pd
 import os
@@ -135,6 +133,9 @@ def main():
     #                      help='save_dir to output result (default: )')
     args = parser.parse_args()
 
+    # Set the seed for everything
+    set_seed(args.seed)
+
     expander_graph_generation_fn = None
     if args.expander_graph_generation_method == "perfect-matchings":
         expander_graph_generation_fn = functools.partial(
@@ -155,13 +156,9 @@ def main():
         expander_graph_generation_fn = functools.partial(
             expander_graph_generation.add_expander_edges_via_ramanujan_bipartite_graph,
             args.expander_graph_order,
-            args.seed,
             "code2")
 
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-
-    # Set the seed for everything
-    set_seed(args.seed)
 
     # Set path
     path = os.path.join(os.getcwd() + f"/logs/{args.dataset}/")
