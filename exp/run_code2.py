@@ -117,7 +117,7 @@ def main():
                         help='dataset name (default: ogbg-code2)')
     parser.add_argument('--expander', dest='expander', type=str2bool, default=True,
                         help='whether to use expander graph propagation')
-    parser.add_argument('--expander_graph_generation_method', type=str, default="ramanujan-bipartite",
+    parser.add_argument('--expander_graph_generation_method', type=str, default="perfect-matchings",
                         choices=['perfect-matchings', 'ramanujan-bipartite',
                                  'perfect-matchings-shortest-path',
                                  'perfect-matchings-access-time'],
